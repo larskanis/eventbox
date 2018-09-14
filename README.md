@@ -87,11 +87,20 @@ Running this takes one second and prints an output similar to this:
     go returned: 2 thread: 72
     go returned: 0 thread: 04
 
-The thread object_id above is shortened for better readability.
+The thread `object_id` above is shortened for better readability.
 Although `go` and `done` are called from different threads (86, 72, 04), they are enqueued into the event loop of Box1 and subsequently executed by the main thread (56).
 Since all calls are handled by one thread internally, access to instance variables is safe without locks.
 In contrast each call to `action` is executed by it's own thread (54, 36, 16).
 All parameters passed to the thread are copied or securely wrapped and the action has with no access to local or instance variables.
+
+
+## Comparison with other libraries
+
+Eventbox doesn't try to implement IO or other blocking operations on top of the global event loop of a reactor model.
+Instead it encourages the use of blocking operations and handles method calls as events to a boxed event loop of a single object.
+This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid).
+Eventbox is reasonably fast, but is not written to minimize resource consumption or maximize performance.
+Instead it is written to minimize race conditions and implementation complexity in a multithreaded environment.
 
 
 ## Contributing
