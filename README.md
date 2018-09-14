@@ -9,6 +9,10 @@ All blocking operations can be executed in action threads.
 Data races are avoided through filters applied to all inputs and outputs.
 That way Eventbox guarantees stable objects without a need for any locks.
 
+## Requirements
+
+* Ruby-2.3 or newer or
+* JRuby 9.1 or newer
 
 ## Installation
 
