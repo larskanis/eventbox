@@ -101,7 +101,9 @@ All parameters passed to the thread are copied or securely wrapped and the actio
 ## Comparison with other libraries
 
 Eventbox doesn't try to implement IO or other blocking operations on top of the global event loop of a reactor model.
-Instead it encourages the use of blocking operations and handles method calls as events to a boxed event loop of a single object.
+Instead it encourages the use of blocking operations and threads.
+The only type of events handled by the object internal event loop are method calls.
+
 This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid).
 Eventbox is reasonably fast, but is not written to minimize resource consumption or maximize performance.
 Instead it is written to minimize race conditions and implementation complexity in a multithreaded environment.
