@@ -4,9 +4,10 @@ _Manage multithreading with the safety of event based programming_
 
 Eventbox objects are event based from the inside but thread safe from the outside.
 All code inside an Eventbox object is executed sequentially by a single thread.
-All blocking operations are executed in threads without mutation of data.
+So it shouldn't do any blocking operations.
+All blocking operations can be executed in action threads.
 Data races are avoided through filters applied to all inputs and outputs.
-That way Eventbox garanties stable objects without a need for any locks.
+That way Eventbox guarantees stable objects without a need for any locks.
 
 
 ## Installation
@@ -27,17 +28,75 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+See the following example:
 
-## Development
+    class Box1 < Eventbox
+      # Define a method with deferred return value.
+      yield_call def go(id, result)
+        puts "go called: #{id} thread: #{Thread.current.object_id}"
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+        # Start a new thread to execute blocking functions.
+        # Parameters are passed safely as copied or wrapped objects.
+        action id, result, def wait(id, result)
+          puts "action #{id} started thread: #{Thread.current.object_id}"
+          sleep 1
+          done(id, result)
+          puts "action #{id} finished thread: #{Thread.current.object_id}"
+        end
+      end
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+      # Define a method with no return value.
+      async_call def done(id, result)
+        puts "done called: #{id} thread: #{Thread.current.object_id}"
+        # Let fc.go return
+        result.yield
+      end
+    end
+    fc = Box1.new
+
+    th = Thread.new do
+      # Run 3 threads which call fc.go concurrently.
+      3.times.map do |id|
+        Thread.new do
+          fc.go(id)
+          puts "go returned: #{id} thread: #{Thread.current.object_id}"
+        end
+      end.map(&:value)
+      # Let fc.run exit
+      fc.exit_run
+    end
+
+    # Run the event loop of Box1
+    fc.run
+
+Running this takes one second and prints an output similar to this:
+
+    go called: 1 thread: 56
+    go called: 0 thread: 56
+    go called: 2 thread: 56
+    action 1 started thread: 54
+    action 0 started thread: 36
+    action 2 started thread: 16
+    action 1 finished thread: 54
+    done called: 1 thread: 56
+    go returned: 1 thread: 86
+    action 2 finished thread: 16
+    done called: 2 thread: 56
+    action 0 finished thread: 36
+    done called: 0 thread: 56
+    go returned: 2 thread: 72
+    go returned: 0 thread: 04
+
+The thread object_id above is shortened for better readability.
+Although `go` and `done` are called from different threads (86, 72, 04), they are enqueued into the event loop of Box1 and subsequently executed by the main thread (56).
+Since all calls are handled by one thread internally, access to instance variables is safe without locks.
+In contrast each call to `action` is executed by it's own thread (54, 36, 16).
+All parameters passed to the thread are copied or securely wrapped and the action has with no access to local or instance variables.
+
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/eventbox. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
+Bug reports and pull requests are welcome on GitHub at https://github.com/larskanis/eventbox. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
 
 ## License
 
@@ -45,4 +104,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the Eventbox project’s codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/eventbox/blob/master/CODE_OF_CONDUCT.md).
+Everyone interacting in the Eventbox project’s codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/larskanis/eventbox/blob/master/CODE_OF_CONDUCT.md).
