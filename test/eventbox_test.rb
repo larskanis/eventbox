@@ -497,7 +497,7 @@ class EventboxTest < Minitest::Test
   end
 
   class ConcurrentWorkers < Eventbox
-    def initialize(*args)
+    def initialize
       super
       @tasks = []
       @waiting = {}

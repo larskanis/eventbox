@@ -18,9 +18,6 @@ class Eventbox
   # It is also possible to call synchronous methods from a different thread.
   # These calls will block until #run is started.
   def initialize(threadpool = Thread)
-    # Immediately exit when called from action method
-    return unless threadpool
-
     @exit_run = nil
     @threadpool = threadpool
     @ctrl_thread = Thread.current
@@ -46,7 +43,16 @@ class Eventbox
     # Define an annonymous class which is used as execution context for actions.
     meths = public_methods - Object.new.methods - [:run]
     selfobj = self
+
+    # When called from action method, this class is used as execution environment for the newly created thread.
+    # All calls to public methods are passed to the calling instance.
     @action_class = Class.new(self.class) do
+
+      # Overwrite the usual initialization.
+      def initialize
+      end
+
+      # Forward method calls.
       meths.each do |fwmeth|
         define_method(fwmeth) do |*args|
           selfobj.send(fwmeth, *args)
@@ -258,7 +264,7 @@ class Eventbox
   def action(*args, method_name)
     raise InvalidAccess, "action must be called from the same thread as new" if ::Thread.current!=@ctrl_thread
 
-    sandbox = @action_class.new(nil)
+    sandbox = @action_class.new
     if block_given?
       args << method_name
       method_name = yield(sandbox)
