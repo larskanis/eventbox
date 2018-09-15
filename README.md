@@ -34,62 +34,66 @@ Or install it yourself as:
 
 See the following example:
 
-    class Box1 < Eventbox
-      # Define a method with deferred return value.
-      yield_call def go(id, result)
-        puts "go called: #{id} thread: #{Thread.current.object_id}"
+```ruby
+class Box1 < Eventbox
+  # Define a method with deferred return value.
+  yield_call def go(id, result)
+    puts "go called: #{id} thread: #{Thread.current.object_id}"
 
-        # Start a new thread to execute blocking functions.
-        # Parameters are passed safely as copied or wrapped objects.
-        action id, result, def wait(id, result)
-          puts "action #{id} started thread: #{Thread.current.object_id}"
-          sleep 1
-          done(id, result)
-          puts "action #{id} finished thread: #{Thread.current.object_id}"
-        end
-      end
-
-      # Define a method with no return value.
-      async_call def done(id, result)
-        puts "done called: #{id} thread: #{Thread.current.object_id}"
-        # Let fc.go return
-        result.yield
-      end
+    # Start a new thread to execute blocking functions.
+    # Parameters are passed safely as copied or wrapped objects.
+    action id, result, def wait(id, result)
+      puts "action #{id} started thread: #{Thread.current.object_id}"
+      sleep 1
+      done(id, result)
+      puts "action #{id} finished thread: #{Thread.current.object_id}"
     end
-    fc = Box1.new
+  end
 
-    th = Thread.new do
-      # Run 3 threads which call fc.go concurrently.
-      3.times.map do |id|
-        Thread.new do
-          fc.go(id)
-          puts "go returned: #{id} thread: #{Thread.current.object_id}"
-        end
-      end.map(&:value)
-      # Let fc.run exit
-      fc.exit_run
+  # Define a method with no return value.
+  async_call def done(id, result)
+    puts "done called: #{id} thread: #{Thread.current.object_id}"
+    # Let fc.go return
+    result.yield
+  end
+end
+fc = Box1.new
+
+th = Thread.new do
+  # Run 3 threads which call fc.go concurrently.
+  3.times.map do |id|
+    Thread.new do
+      fc.go(id)
+      puts "go returned: #{id} thread: #{Thread.current.object_id}"
     end
+  end.map(&:value)
+  # Let fc.run exit
+  fc.exit_run
+end
 
-    # Run the event loop of Box1
-    fc.run
+# Run the event loop of Box1
+fc.run
+```
 
 Running this takes one second and prints an output similar to this:
 
-    go called: 1 thread: 56
-    go called: 0 thread: 56
-    go called: 2 thread: 56
-    action 1 started thread: 54
-    action 0 started thread: 36
-    action 2 started thread: 16
-    action 1 finished thread: 54
-    done called: 1 thread: 56
-    go returned: 1 thread: 86
-    action 2 finished thread: 16
-    done called: 2 thread: 56
-    action 0 finished thread: 36
-    done called: 0 thread: 56
-    go returned: 2 thread: 72
-    go returned: 0 thread: 04
+```javascript
+go called: 1 thread: 56
+go called: 0 thread: 56
+go called: 2 thread: 56
+action 1 started thread: 54
+action 0 started thread: 36
+action 2 started thread: 16
+action 1 finished thread: 54
+done called: 1 thread: 56
+go returned: 1 thread: 86
+action 2 finished thread: 16
+done called: 2 thread: 56
+action 0 finished thread: 36
+done called: 0 thread: 56
+go returned: 2 thread: 72
+go returned: 0 thread: 04
+```
 
 The thread `object_id` above is shortened for better readability.
 Although `go` and `done` are called from different threads (86, 72, 04), they are enqueued into the event loop of Box1 and subsequently executed by the main thread (56).

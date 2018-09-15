@@ -8,8 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Lars Kanis"]
   spec.email         = ["lars@greiz-reinsdorf.de"]
 
-  spec.summary       = %q{Manage multithreading with the safety of event based programming}
-  spec.description   = %q{Eventbox objects are event based from the inside but thread safe from the outside. All code inside an Eventbox object is executed sequentially and avoids data races through filters applied to all inputs and outputs. That way Eventbox garanties stable objects without a need for any locks.}
+  if File.read("README.md") =~ /^_(.*?)_$\s^\n(.*?)\n$/m
+    spec.summary = $1
+    spec.description = $2
+  end
   spec.homepage      = "https://github.com/larskanis/eventbox"
   spec.license       = "MIT"
 
