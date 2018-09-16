@@ -38,7 +38,7 @@ class EventboxTest < Minitest::Test
   end
 
   class TestInitWithDef < Eventbox
-    async_call def init(num, pr)
+    sync_call def initialize(num, pr)
       @values = [num.class, pr.class, Thread.current.object_id]
     end
     attr_reader :values
@@ -57,14 +57,17 @@ class EventboxTest < Minitest::Test
     assert_equal eb.thread, eb.values[2]
   end
 
+  class TestInitWithDefAndSuper < TestInitWithDef
+    sync_call def initialize(num, pr)
+      super
+      @values << Thread.current.object_id
+      p self
+    end
+  end
+
   def test_init_with_async_def_and_super
-    pr = proc {}
-    eb = Class.new(TestInitWithDef) do
-      async_call def init(num, pr)
-        super
-        @values << Thread.current.object_id
-      end
-    end.new(123, pr)
+    eb = TestInitWithDefAndSuper.new(123, proc{})
+    p eb
 
     assert_equal eb.thread, eb.values[2], "superclass was called"
     assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
@@ -73,7 +76,7 @@ class EventboxTest < Minitest::Test
   def test_init_with_sync_def_and_super
     pr = proc {}
     eb = Class.new(TestInitWithDef) do
-      sync_call def init(num, pr)
+      sync_call def initialize(num, pr)
         super
         @values << Thread.current.object_id
       end
@@ -85,7 +88,7 @@ class EventboxTest < Minitest::Test
 
   def test_init_with_yield_def_and_super
     eb = Class.new(TestInitWithDef) do
-      yield_call def init(num, result)
+      yield_call def initialize(num, result)
         super
         @values << Thread.current.object_id
         result.yield
@@ -98,7 +101,7 @@ class EventboxTest < Minitest::Test
   end
 
   class TestInitWithBlock < Eventbox
-    async_call :init do |num, pr|
+    async_call :initialize do |num, pr|
       @values = [num.class, pr.class, Thread.current.object_id]
     end
     attr_reader :values
@@ -120,7 +123,7 @@ class EventboxTest < Minitest::Test
   def test_init_with_async_block_and_super
     pr = proc {}
     eb = Class.new(TestInitWithBlock) do
-      async_call :init do |num, pr2|
+      async_call :initialize do |num, pr2|
         super(num, pr2) # block form requres explicit parameters
         @values << Thread.current.object_id
       end
@@ -152,7 +155,7 @@ class EventboxTest < Minitest::Test
   end
 
   class FcModifyParams < Eventbox
-    async_call def init(str)
+    async_call def initialize(str)
       @str = str
       action @str, block, def modify_action(str, block)
         modify(str, block)

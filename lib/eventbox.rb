@@ -3,72 +3,162 @@ class Eventbox
 
   class InvalidAccess < RuntimeError; end
   class NoResult < RuntimeError; end
+  AsyncCall = Struct.new :name, :args
+  SyncCall = Struct.new :name, :args, :answer_queue
+  YieldCall = Struct.new :name, :args, :answer_queue
 
   private
 
-  def self.return_args(args)
-    args.length <= 1 ? args.first : args
-  end
+  class << self
+    def return_args(args)
+      args.length <= 1 ? args.first : args
+    end
 
-  # Create a new Eventbox instance.
-  #
-  # The same thread which called Eventbox.new, must also call Eventbox#run.
-  # It is possible to call asynchronous methods to the instance before calling #run .
-  # They are processed as soon as #run is started.
-  # It is also possible to call synchronous methods from a different thread.
-  # These calls will block until #run is started.
-  def initialize(*args, &block)
-    threadpool = Thread
-    loop_running = Queue.new
-
-    @threads = ThreadRegistry.new
-    ObjectSpace.define_finalizer(self, @threads.method(:stop_all))
-
-    @threads.loop_thread = threadpool.new do
-      # TODO Better hide these instance variables for derived classes:
-      @exit_run = nil
-      @threadpool = threadpool
-      @ctrl_thread = Thread.current
-      @input_queue = Queue.new
-
-      # Verify that all public methods are properly wrapped
-      obj = Object.new
-      meths = methods - obj.methods - [:run, :mo, :mutable_object]
-      prmeths = private_methods - obj.private_methods
-      prohib = meths.find do |name|
-        !prmeths.include?(:"__#{name}__")
+    def new(*args, &block)
+      if const_defined?(:Box, false)
+        boxed_obj = allocate
+        const_get(:Box).new(boxed_obj, args, block)
+      else
+        super
       end
-      if prohib
-        meth = method(prohib)
-        raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
+    end
+
+    def with_block_or_def(name, block, &cexec)
+      define_method(name, &block) if block
+
+      if const_defined?(:Box, false)
+        box = const_get(:Box)
+      else
+        box = Class.new(self) do
+          def initialize(boxed_obj, superargs, superblock, threadpool = Thread)
+            @boxed_obj = boxed_obj
+            loop_running = Queue.new
+
+            @threads = ThreadRegistry.new
+            ObjectSpace.define_finalizer(self, @threads.method(:stop_all))
+
+            @threads.loop_thread = threadpool.new do
+              @exit_run = nil
+              @threadpool = threadpool
+              @ctrl_thread = Thread.current
+              @input_queue = Queue.new
+
+              obj = Object.new
+
+              # Prepare list of prohibited method names for action
+              prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
+              @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
+
+              # Define an annonymous class which is used as execution context for actions.
+              meths = public_methods - Object.new.methods
+              selfobj = self
+
+              # When called from action method, this class is used as execution environment for the newly created thread.
+              # All calls to public methods are passed to the calling instance.
+              @action_class = Class.new(self.class) do
+                # Forward method calls.
+                meths.each do |fwmeth|
+                  define_method(fwmeth) do |*fwargs, &fwblock|
+                    selfobj.send(fwmeth, *fwargs, &fwblock)
+                  end
+                end
+              end
+
+              loop_running << true
+
+              run
+            end
+
+            loop_running.deq
+
+            send(:initialize_eventbox, *superargs, &superblock)
+          end
+        end
+        const_set(:Box, box)
       end
 
-      # Prepare list of prohibited method names for action
-      prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
-      @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
+      if name.to_sym == :initialize
+        box.define_method(:initialize_eventbox, &cexec)
+      else
+        box.define_method(name, &cexec)
+      end
+    end
 
-      # Define an annonymous class which is used as execution context for actions.
-      meths = public_methods - Object.new.methods - [:run]
-      selfobj = self
+    # Define a method for asynchronous (fire-and-forget) calls.
+    #
+    # The created method can be called from any thread.
+    # The call is enqueued into the input queue of the control loop.
+    # A call wakes the control loop started by #run , so that the method body is executed concurrently.
+    # All parameters given to the are passed to the block as either copies or wrapped objects.
+    # A marshalable object is passed as a deep copy through Marshal.dump and Marshal.load .
+    # An object which faild to marshal is wrapped by Eventbox::MutableWrapper.
+    # Access to the wrapped object from the control thread is denied, but the wrapper can be stored and passed to other actions.
+    def async_call(name, &block)
+      with_block_or_def(name, block) do |*args|
+        args = sanity_before_queue(args)
+        @input_queue << AsyncCall.new(name, args)
+      end
+    end
 
-      # When called from action method, this class is used as execution environment for the newly created thread.
-      # All calls to public methods are passed to the calling instance.
-      @action_class = Class.new(self.class) do
-        # Forward method calls.
-        meths.each do |fwmeth|
-          define_method(fwmeth) do |*fwargs, &fwblock|
-            selfobj.send(fwmeth, *fwargs, &fwblock)
+    # Define a method for synchronous calls.
+    #
+    # The created method can be called from any thread.
+    # It is simular to #async_call , but the method doesn't return immediately, but waits until the method body is executed and returns its return value.
+    #
+    # The return value is passed either as a copy or as a unwrapped object.
+    # The return value is therefore handled similar to parameters to #action .
+    def sync_call(name, &block)
+      with_block_or_def(name, block) do |*args|
+        args = sanity_before_queue(args)
+        answer_queue = Queue.new
+        @input_queue << SyncCall.new(name, args, answer_queue)
+        args = answer_queue.deq
+        sanity_after_queue(args)
+      end
+    end
+
+    # Define a method for synchronous calls with asynchronous result.
+    #
+    # The created method can be called from any thread.
+    # It is simular to #sync_call , but not the result of the block is returned, but is returned per yield.
+    #
+    # The yielded value is passed either as a copy or as a unwrapped object.
+    # The yielded value is therefore handled similar to parameters to #action .
+    def yield_call(name, &block)
+      with_block_or_def(name, block) do |*args, &cb|
+        args = sanity_before_queue(args)
+        answer_queue = Queue.new
+        @input_queue << YieldCall.new(name, args, answer_queue)
+        loop do
+          rets = answer_queue.deq
+          case rets
+          when Callback
+            cbargs = sanity_after_queue(rets.args)
+            cbres = cb.yield(*cbargs)
+            cbres = sanity_before_queue(cbres)
+            @input_queue << CallbackResult.new(cbres, rets.cbresult)
+          else
+            answer_queue.close
+            return sanity_after_queue(rets)
           end
         end
       end
-
-      loop_running << true
-      run
     end
 
-    loop_running.deq
-
-    init(*args, &block)
+    def attr_writer(name)
+      async_call("#{name}=") do |value|
+        instance_variable_set("@#{name}", value)
+      end
+    end
+    def attr_reader(name)
+      sync_call("#{name}") do
+        instance_variable_get("@#{name}")
+      end
+    end
+    def attr_accessor(name)
+      attr_reader name
+      attr_writer name
+    end
   end
 
   private
@@ -167,126 +257,6 @@ class Eventbox
     # @input_queue.close
 
     @exit_return_value
-  end
-
-  def self.with_block_or_def(name, block, &cexec)
-    if block
-      define_method(name, &cexec)
-      private define_method("__#{name}__", &block)
-    else
-      alias_method("__#{name}__", name)
-      private("__#{name}__")
-      remove_method(name)
-      define_method(name, &cexec)
-    end
-  end
-
-  AsyncCall = Struct.new :name, :args
-
-  # Define a method for asynchronous (fire-and-forget) calls.
-  #
-  # The created method can be called from any thread.
-  # The call is enqueued into the input queue of the control loop.
-  # A call wakes the control loop started by #run , so that the method body is executed concurrently.
-  # All parameters given to the are passed to the block as either copies or wrapped objects.
-  # A marshalable object is passed as a deep copy through Marshal.dump and Marshal.load .
-  # An object which faild to marshal is wrapped by Eventbox::MutableWrapper.
-  # Access to the wrapped object from the control thread is denied, but the wrapper can be stored and passed to other actions.
-  def self.async_call(name, &block)
-    unbound_method = nil
-    with_block_or_def(name, block) do |*args|
-      if ::Thread.current==@ctrl_thread
-        # Use the correct method within the class hierarchy, instead of just self.send(*args).
-        # Otherwise super() would start an infinite recursion.
-        unbound_method.bind(self).call(*args)
-      else
-        args = sanity_before_queue(args)
-        @input_queue << AsyncCall.new(name, args)
-      end
-    end
-    unbound_method = self.instance_method("__#{name}__")
-  end
-
-  SyncCall = Struct.new :name, :args, :answer_queue
-
-  # Define a method for synchronous calls.
-  #
-  # The created method can be called from any thread.
-  # It is simular to #async_call , but the method doesn't return immediately, but waits until the method body is executed and returns its return value.
-  #
-  # The return value is passed either as a copy or as a unwrapped object.
-  # The return value is therefore handled similar to parameters to #action .
-  def self.sync_call(name, &block)
-    unbound_method = nil
-    with_block_or_def(name, block) do |*args|
-      if ::Thread.current==@ctrl_thread
-        unbound_method.bind(self).call(*args)
-      else
-        args = sanity_before_queue(args)
-        answer_queue = Queue.new
-        @input_queue << SyncCall.new(name, args, answer_queue)
-        args = answer_queue.deq
-        sanity_after_queue(args)
-      end
-    end
-    unbound_method = self.instance_method("__#{name}__")
-  end
-
-  YieldCall = Struct.new :name, :args, :answer_queue
-
-  # Define a method for synchronous calls with asynchronous result.
-  #
-  # The created method can be called from any thread.
-  # It is simular to #sync_call , but not the result of the block is returned, but is returned per yield.
-  #
-  # The yielded value is passed either as a copy or as a unwrapped object.
-  # The yielded value is therefore handled similar to parameters to #action .
-  def self.yield_call(name, &block)
-    unbound_method = nil
-    with_block_or_def(name, block) do |*args, &cb|
-      if ::Thread.current==@ctrl_thread
-        unbound_method.bind(self).call(*args, proc do |*res|
-          return self.class.return_args(res)
-        end) do |*cbargs, &cbresult|
-          cbres = cb.yield(*cbargs)
-          cbresult.yield(cbres)
-        end
-        raise NoResult, "no result yielded"
-      else
-        args = sanity_before_queue(args)
-        answer_queue = Queue.new
-        @input_queue << YieldCall.new(name, args, answer_queue)
-        loop do
-          rets = answer_queue.deq
-          case rets
-          when Callback
-            cbargs = sanity_after_queue(rets.args)
-            cbres = cb.yield(*cbargs)
-            cbres = sanity_before_queue(cbres)
-            @input_queue << CallbackResult.new(cbres, rets.cbresult)
-          else
-            answer_queue.close
-            return sanity_after_queue(rets)
-          end
-        end
-      end
-    end
-    unbound_method = self.instance_method("__#{name}__")
-  end
-
-  def self.attr_writer(name)
-    async_call("#{name}=") do |value|
-      instance_variable_set("@#{name}", value)
-    end
-  end
-  def self.attr_reader(name)
-    sync_call("#{name}") do
-      instance_variable_get("@#{name}")
-    end
-  end
-  def self.attr_accessor(name)
-    attr_reader name
-    attr_writer name
   end
 
   # Stop the control loop started by #run .
@@ -491,11 +461,11 @@ class Eventbox
     call = @input_queue.deq
     case call
     when SyncCall
-      res = self.send("__#{call.name}__", *sanity_after_queue(call.args))
+      res = @boxed_obj.send(call.name, *sanity_after_queue(call.args))
       res = sanity_before_queue(res)
       call.answer_queue << res
     when YieldCall
-      self.send("__#{call.name}__", *sanity_after_queue(call.args), proc do |*resu|
+      @boxed_obj.send(call.name, *sanity_after_queue(call.args), proc do |*resu|
         resu = self.class.return_args(resu)
         resu = sanity_before_queue(resu)
         call.answer_queue << resu
@@ -504,7 +474,7 @@ class Eventbox
         call.answer_queue << Callback.new(cbargs, cbresult)
       end
     when AsyncCall
-      self.send("__#{call.name}__", *sanity_after_queue(call.args))
+      @boxed_obj.send(call.name, *sanity_after_queue(call.args))
     when CallbackResult
       cbres = sanity_after_queue(call.res)
       call.cbresult.yield(cbres)
