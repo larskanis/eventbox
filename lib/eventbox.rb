@@ -125,7 +125,7 @@ class Eventbox
     else
       alias_method("__#{name}__", name)
       private("__#{name}__")
-      undef_method(name)
+      remove_method(name)
       define_method(name, &cexec)
     end
   end
@@ -142,14 +142,18 @@ class Eventbox
   # An object which faild to marshal is wrapped by Eventbox::MutableWrapper.
   # Access to the wrapped object from the control thread is denied, but the wrapper can be stored and passed to other actions.
   def self.async_call(name, &block)
+    unbound_method = nil
     with_block_or_def(name, block) do |*args|
       if ::Thread.current==@ctrl_thread
-        self.send("__#{name}__", *args)
+        # Use the correct method within the class hierarchy, instead of just self.send(*args).
+        # Otherwise super() would start an infinite recursion.
+        unbound_method.bind(self).call(*args)
       else
         args = sanity_before_queue(args)
         @input_queue << AsyncCall.new(name, args)
       end
     end
+    unbound_method = self.instance_method("__#{name}__")
   end
 
   SyncCall = Struct.new :name, :args, :answer_queue
@@ -162,9 +166,10 @@ class Eventbox
   # The return value is passed either as a copy or as a unwrapped object.
   # The return value is therefore handled similar to parameters to #action .
   def self.sync_call(name, &block)
+    unbound_method = nil
     with_block_or_def(name, block) do |*args|
       if ::Thread.current==@ctrl_thread
-        self.send("__#{name}__", *args)
+        unbound_method.bind(self).call(*args)
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
@@ -173,6 +178,7 @@ class Eventbox
         sanity_after_queue(args)
       end
     end
+    unbound_method = self.instance_method("__#{name}__")
   end
 
   YieldCall = Struct.new :name, :args, :answer_queue
@@ -185,9 +191,10 @@ class Eventbox
   # The yielded value is passed either as a copy or as a unwrapped object.
   # The yielded value is therefore handled similar to parameters to #action .
   def self.yield_call(name, &block)
+    unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
       if ::Thread.current==@ctrl_thread
-        self.send("__#{name}__", *args, proc do |*res|
+        unbound_method.bind(self).call(*args, proc do |*res|
           return self.class.return_args(res)
         end) do |*cbargs, &cbresult|
           cbres = cb.yield(*cbargs)
@@ -213,6 +220,7 @@ class Eventbox
         end
       end
     end
+    unbound_method = self.instance_method("__#{name}__")
   end
 
   def self.attr_writer(name)
@@ -277,7 +285,7 @@ class Eventbox
       end
 
       meth = self.class.instance_method(method_name).bind(sandbox)
-      meth.owner.send(:undef_method, method_name)
+      meth.owner.send(:remove_method, method_name)
     end
 
     args = sanity_before_queue(args)
