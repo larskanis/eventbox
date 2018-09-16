@@ -10,7 +10,10 @@ class EventboxTest < Minitest::Test
   end
 
   def teardown
+    # Trigger ObjectRegistry#untag and thread stopping
+    GC.start
     sleep 0.1 if (Thread.list - @start_threads).any?
+
     lingering = Thread.list - @start_threads
     if lingering.any?
       puts "#{lingering.length} lingering threads:"
@@ -18,9 +21,6 @@ class EventboxTest < Minitest::Test
         puts "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) } }"
       end
     end
-
-    # Trigger ObjectRegistry#untag
-    GC.start
   end
 
   def with_report_on_exception(enabled)
@@ -37,57 +37,156 @@ class EventboxTest < Minitest::Test
     end
   end
 
+  class TestInitWithDef < Eventbox
+    async_call def init(num, pr)
+      @values = [num.class, pr.class, Thread.current.object_id]
+    end
+    attr_reader :values
+    sync_call def thread
+      Thread.current.object_id
+    end
+  end
+
+  def test_init_with_def
+    pr = proc {}
+    eb = TestInitWithDef.new(123, pr)
+
+    assert_equal Integer, eb.values[0]
+    assert_equal Eventbox::ExternalObject, eb.values[1]
+    refute_equal Thread.current.object_id, eb.values[2]
+    assert_equal eb.thread, eb.values[2]
+  end
+
+  def test_init_with_async_def_and_super
+    pr = proc {}
+    eb = Class.new(TestInitWithDef) do
+      async_call def init(num, pr)
+        super
+        @values << Thread.current.object_id
+      end
+    end.new(123, pr)
+
+    assert_equal eb.thread, eb.values[2], "superclass was called"
+    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+  end
+
+  def test_init_with_sync_def_and_super
+    pr = proc {}
+    eb = Class.new(TestInitWithDef) do
+      sync_call def init(num, pr)
+        super
+        @values << Thread.current.object_id
+      end
+    end.new(123, pr)
+
+    assert_equal eb.thread, eb.values[2], "superclass was called"
+    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+  end
+
+  def test_init_with_yield_def_and_super
+    eb = Class.new(TestInitWithDef) do
+      yield_call def init(num, result)
+        super
+        @values << Thread.current.object_id
+        result.yield
+      end
+    end.new(123)
+
+    assert_equal Proc, eb.values[1], "result is passed to superclass"
+    assert_equal eb.thread, eb.values[2], "superclass was called"
+    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+  end
+
+  class TestInitWithBlock < Eventbox
+    async_call :init do |num, pr|
+      @values = [num.class, pr.class, Thread.current.object_id]
+    end
+    attr_reader :values
+    sync_call :thread do
+      Thread.current.object_id
+    end
+  end
+
+  def test_init_with_block
+    pr = proc {}
+    eb = TestInitWithBlock.new(123, pr)
+
+    assert_equal Integer, eb.values[0]
+    assert_equal Eventbox::ExternalObject, eb.values[1]
+    refute_equal Thread.current.object_id, eb.values[2]
+    assert_equal eb.thread, eb.values[2]
+  end
+
+  def test_init_with_async_block_and_super
+    pr = proc {}
+    eb = Class.new(TestInitWithBlock) do
+      async_call :init do |num, pr2|
+        super(num, pr2) # block form requres explicit parameters
+        @values << Thread.current.object_id
+      end
+    end.new(123, pr)
+
+    assert_equal eb.thread, eb.values[2], "superclass was called"
+    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+  end
+
   class FcSleep < Eventbox
-    private def start
-      action 0.01 do |o|
-        def o.o time
+    yield_call def wait(time, result)
+      action time, result do |o|
+        def o.o time, result
           sleep(time)
-          timeout
+          timeout(result)
         end
       end
     end
 
-    async_call def timeout
-      exit_run
+    async_call def timeout(result)
+      result.yield
     end
   end
 
   def test_sleep
     st = Time.now
-    FcSleep.new.run
+    FcSleep.new.wait(0.01)
     assert_operator Time.now-st, :>=, 0.01
   end
 
   class FcModifyParams < Eventbox
-    private def start
-      @str = "a".dup
-      action @str, def modify_action str
-        modify(str)
+    async_call def init(str)
+      @str = str
+      action @str, block, def modify_action(str, block)
+        modify(str, block)
         str << "c"
       end
+      @str << "e"
     end
 
     private def repeat
       @str << "b"
     end
 
-    async_call :modify do |str|
-      exit_run str
+    sync_call :modify do |str, block|
       str << "d"
+      block.yield str
     end
   end
 
   def test_modify_params
-    str = FcModifyParams.new.run
-    assert_equal "ad", str
+    str = "a"
+    FcModifyParams.new(str) do |str2|
+    end
+    assert_equal "ad", str2
+    assert_equal "a", str
   end
 
-  class FcExtToIntObject < Eventbox
-    private def start
+  class FcPipe < Eventbox
+    async_call def init
       @inp = nil
       @out = nil
+      @char = nil
+      @result = nil
       action def create_pipe
-        pipeios(*IO.pipe)
+        pipeios_opened(*IO.pipe)
       end
     end
 
@@ -105,29 +204,31 @@ class EventboxTest < Minitest::Test
       end
     end
 
-    private def stop
-      @final_char = @char
-    end
-
-    async_call :pipeios do |inp, out|
+    async_call def pipeios_opened(inp, out)
       @inp = inp
       @out = out
     end
 
-    async_call :received do |char|
+    async_call def received(char)
       @char = char
-      exit_run
+      if @result
+        @result.yield char
+        @result = nil
+      end
     end
 
-    sync_call :final_char do
-      @final_char
+    yield_call def await_char(result)
+      if @char
+        result.yield @char
+      else
+        @result = result
+      end
     end
   end
 
-  def test_ExtToIntObject
-    fc = FcExtToIntObject.new
-    fc.run
-    assert_equal "A", fc.final_char
+  def test_pipe
+    fc = FcPipe.new
+    assert_equal "A", fc.await_char
   end
 
   def test_ext_to_int_sync_call_with_result
@@ -497,13 +598,10 @@ class EventboxTest < Minitest::Test
   end
 
   class ConcurrentWorkers < Eventbox
-    def initialize
-      super
+    async_call def init
       @tasks = []
       @waiting = {}
       @working = {}
-      @tasks_running = 0
-      @results = {}
     end
 
     async_call def add_worker(workerid)
@@ -511,14 +609,6 @@ class EventboxTest < Minitest::Test
         while n=next_task(workerid)
           task_finished(workerid, "#{n} finished")
         end
-      end
-    end
-
-    async_call def add_task(taskid)
-      @tasks_running += 1
-      action taskid, def task(taskid)
-        res = process("task #{taskid}")
-        add_to_result_list(taskid, res)
       end
     end
 
@@ -545,12 +635,19 @@ class EventboxTest < Minitest::Test
     async_call def task_finished(workerid, result)
       @working.delete(workerid).yield result
     end
+  end
 
-    async_call def add_to_result_list(taskid, res)
-      @results[taskid] = res
-      @tasks_running -= 1
-      exit_run @results if @tasks_running == 0
-    end
+  def test_concurrent_workers
+    cw = ConcurrentWorkers.new
+
+    values = 10.times.map do |taskid|
+      Thread.new do
+        cw.add_worker(taskid) if taskid > 5
+        cw.process "task #{taskid}"
+      end
+    end.map(&:value)
+
+    assert_equal 10.times.map { |i| "task #{i} finished" }, values
   end
 
   class ConcurrentWorkers2 < ConcurrentWorkers
@@ -572,36 +669,58 @@ class EventboxTest < Minitest::Test
     end
   end
 
-  def test_concurrent_workers
-    cw = ConcurrentWorkers.new
-    10.times do |workerid|
-      cw.add_task(workerid)
-    end
-    2.times do |workerid|
-      cw.add_worker(workerid)
-    end
-
-    assert_equal 10.times.each.with_object({}){|i, h| h[i] = "task #{i} finished" }, cw.run
-  end
-
   def test_concurrent_workers2
     cw = ConcurrentWorkers2.new
     cw.add_worker(0)
 
-    th = Thread.new do
-      values = 10.times.map do |taskid|
-        Thread.new do
-          cw.add_worker(taskid) if taskid > 5
-          cw.process("task #{taskid}")
-        end
-      end.map(&:value)
-      cw.exit_run
+    values = 10.times.map do |taskid|
+      Thread.new do
+        cw.add_worker(taskid) if taskid > 5
+        cw.process("task #{taskid}")
+      end
+    end.map(&:value)
 
-      values
+    assert_equal 10.times.map{|i| "task #{i} finished" }, values
+  end
+
+  class ConcurrentWorkersWithCallback < ConcurrentWorkers2
+    async_call def init
+      super
+      @notify_when_finished = []
     end
-    cw.run
 
-    assert_equal 10.times.map{|i| "task #{i} finished" }, th.value
+    yield_call :process do |name, result, &block|
+      result.yield
+      @tasks << [block, name]
+    end
+
+    async_call :task_finished do |workerid, result|
+      @working.delete(workerid).yield result
+      if @tasks.empty? && @working.empty?
+        @notify_when_finished.each(&:yield)
+      end
+    end
+
+    yield_call :finish_tasks do |result|
+      @notify_when_finished << result
+    end
+  end
+
+  def test_concurrent_workers_with_callback
+    skip "callback from a different method is not yet supported"
+    cw = ConcurrentWorkersWithCallback.new
+    cw.add_worker(0)
+
+    values = []
+    10.times do |taskid|
+      cw.add_worker(taskid) if taskid > 5
+      cw.process("task #{taskid}") do |result|
+        values << result
+      end
+    end
+    cw.finish_tasks # should yield block to process
+
+    assert_equal 10.times.map{|i| "task #{i} finished" }, values
   end
 
   def test_yield_call_with_callback_same_thread

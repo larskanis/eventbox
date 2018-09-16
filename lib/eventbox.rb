@@ -17,91 +17,71 @@ class Eventbox
   # They are processed as soon as #run is started.
   # It is also possible to call synchronous methods from a different thread.
   # These calls will block until #run is started.
-  def initialize(threadpool = Thread)
-    @exit_run = nil
-    @threadpool = threadpool
-    @ctrl_thread = Thread.current
-    @input_queue = Queue.new
-    @threads = {}
+  def initialize(*args, &block)
+    threadpool = Thread
+    loop_running = Queue.new
 
-    # Verify that all public methods are properly wrapped
-    obj = Object.new
-    meths = methods - obj.methods - [:run, :mo, :mutable_object]
-    prmeths = private_methods - obj.private_methods
-    prohib = meths.find do |name|
-      !prmeths.include?(:"__#{name}__")
-    end
-    if prohib
-      meth = method(prohib)
-      raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
-    end
+    @threads = ThreadRegistry.new
+    ObjectSpace.define_finalizer(self, @threads.method(:stop_all))
 
-    # Prepare list of prohibited method names for action
-    prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
-    @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
+    @threads.loop_thread = threadpool.new do
+      # TODO Better hide these instance variables for derived classes:
+      @exit_run = nil
+      @threadpool = threadpool
+      @ctrl_thread = Thread.current
+      @input_queue = Queue.new
 
-    # Define an annonymous class which is used as execution context for actions.
-    meths = public_methods - Object.new.methods - [:run]
-    selfobj = self
-
-    # When called from action method, this class is used as execution environment for the newly created thread.
-    # All calls to public methods are passed to the calling instance.
-    @action_class = Class.new(self.class) do
-
-      # Overwrite the usual initialization.
-      def initialize
+      # Verify that all public methods are properly wrapped
+      obj = Object.new
+      meths = methods - obj.methods - [:run, :mo, :mutable_object]
+      prmeths = private_methods - obj.private_methods
+      prohib = meths.find do |name|
+        !prmeths.include?(:"__#{name}__")
+      end
+      if prohib
+        meth = method(prohib)
+        raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
       end
 
-      # Forward method calls.
-      meths.each do |fwmeth|
-        define_method(fwmeth) do |*args|
-          selfobj.send(fwmeth, *args)
+      # Prepare list of prohibited method names for action
+      prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
+      @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
+
+      # Define an annonymous class which is used as execution context for actions.
+      meths = public_methods - Object.new.methods - [:run]
+      selfobj = self
+
+      # When called from action method, this class is used as execution environment for the newly created thread.
+      # All calls to public methods are passed to the calling instance.
+      @action_class = Class.new(self.class) do
+
+        # Overwrite the usual initialization.
+        def initialize
+        end
+
+        # Forward method calls.
+        meths.each do |fwmeth|
+          define_method(fwmeth) do |*fwargs, &fwblock|
+            selfobj.send(fwmeth, *fwargs, &fwblock)
+          end
         end
       end
-    end
-  end
 
-  public
-
-  # Run the control loop.
-  #
-  # The control loop processes the input queue by executing the enqueued method calls.
-  # It can be stopped by #exit_run .
-  def run
-    raise InvalidAccess, "run must be called from the same thread as new" if ::Thread.current!=@ctrl_thread
-
-    process_input_queue unless @input_queue.empty?
-    start
-
-    until @exit_run
-      begin
-        process_input_queue
-      end until @input_queue.empty?
-
-      repeat
+      loop_running << true
+      run
     end
 
-    process_input_queue unless @input_queue.empty?
-    stop
+    loop_running.deq
 
-    # terminate all running threads
-    @threads.each do |th, _|
-      th.exit
-    end
-
-    # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
-    # @input_queue.close
-
-    @exit_return_value
+    init(*args, &block)
   end
 
   private
 
-  # This method is executed at the start of #run .
+  # This method is executed when the event loop is up and running.
   #
-  # Derive this method for any startup activity.
-  def start
-    # can be derived
+  # Derive this method for initialization.
+  def init(*args)
   end
 
   # This method is executed whenever one or more input events have been processed.
@@ -111,11 +91,87 @@ class Eventbox
     # can be derived
   end
 
-  # This method is executed before of #run exits.
+  class ThreadRegistry
+    class ThreadRegistryAlreadyStopped < RuntimeError
+    end
+
+    def initialize
+      @mutex = Mutex.new
+      @action_threads = {}
+      @stopped = false
+    end
+
+    private def check_stopped
+      if @stopped
+        raise ThreadRegistryAlreadyStopped, "threads were already stopped"
+      end
+    end
+
+    def loop_thread=(th)
+      @mutex.synchronize do
+        check_stopped
+        @loop_thread = th
+      end
+    end
+
+    def add_action_thread(thread)
+      @mutex.synchronize do
+        check_stopped
+        @action_threads[thread] = true
+      end
+    end
+
+    def rm_action_thread(thread)
+      @mutex.synchronize do
+        check_stopped
+        @action_threads.delete(thread)
+      end
+    end
+
+    def stop_all(object_id=nil)
+      @mutex.synchronize do
+        return if @stopped
+        @loop_thread.kill
+        @loop_thread = nil
+      end
+      stop_action_threads
+    end
+
+    def stop_action_threads
+      # terminate all running action threads
+      @mutex.synchronize do
+        return if @stopped
+        check_stopped
+        @action_threads.each do |th, _|
+          th.exit
+        end
+        @action_threads = []
+        @stopped = true
+      end
+    end
+  end
+
+  # Run the event loop.
   #
-  # Derive this method for any shutdown activity.
-  def stop
-    # can be derived
+  # The event loop processes the input queue by executing the enqueued method calls.
+  # It can be stopped by #exit_run .
+  def run
+    raise InvalidAccess, "run must be called from the same thread as new" if ::Thread.current!=@ctrl_thread
+
+    until @exit_run
+      begin
+        process_input_queue
+      end until @input_queue.empty?
+
+      repeat
+    end
+
+    @threads.stop_action_threads
+
+    # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
+    # @input_queue.close
+
+    @exit_return_value
   end
 
   def self.with_block_or_def(name, block, &cexec)
@@ -239,7 +295,7 @@ class Eventbox
   end
 
   # Stop the control loop started by #run .
-  async_call :exit_run do |*values|
+  async_call :shutdown! do |*values|
     @exit_run = true
     @exit_return_value = self.class.return_args(values)
   end
@@ -297,7 +353,7 @@ class Eventbox
       @input_queue << ThreadFinished.new(Thread.current)
     end
 
-    @threads[new_thread] = true
+    @threads.add_action_thread(new_thread)
     nil
   end
 
@@ -458,7 +514,7 @@ class Eventbox
       cbres = sanity_after_queue(call.res)
       call.cbresult.yield(cbres)
     when ThreadFinished
-      @threads.delete(call.thread) or raise(ArgumentError, "unknown thread has finished")
+      @threads.rm_action_thread(call.thread) or raise(ArgumentError, "unknown thread has finished")
     else
       raise ArgumentError, "invalid call type #{call.inspect}"
     end
