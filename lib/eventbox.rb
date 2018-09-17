@@ -266,15 +266,4 @@ class Eventbox
     @event_loop.start_action(meth, args)
     nil
   end
-
-  public
-
-  def mutable_object(object)
-    if Thread.current == @ctrl_thread
-      ObjectRegistry.set_tag(object, @ctrl_thread)
-    else
-      ObjectRegistry.set_tag(object, :extern)
-    end
-    object
-  end
 end

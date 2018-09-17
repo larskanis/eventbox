@@ -57,11 +57,7 @@ class Eventbox
               dumped = Marshal.dump(arg)
             rescue TypeError
               # Object not copyable -> wrap object as internal or external object
-              if Thread.current == ctrl_thread
-                InternalObject.new(arg, ctrl_thread)
-              else
-                ExternalObject.new(arg, ctrl_thread)
-              end
+              pr.call(mutable_object(arg))
             else
               Marshal.load(dumped)
             end
@@ -81,6 +77,17 @@ class Eventbox
         end
       end
       args.is_a?(Array) ? args.map(&pr) : pr.call(args)
+    end
+
+    public
+
+    def mutable_object(object)
+      if Thread.current == @ctrl_thread
+        ObjectRegistry.set_tag(object, @ctrl_thread)
+      else
+        ObjectRegistry.set_tag(object, :extern)
+      end
+      object
     end
   end
 end
