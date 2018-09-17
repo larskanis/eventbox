@@ -1,3 +1,5 @@
+require "weakref"
+
 class Eventbox
   autoload :VERSION, "eventbox/version"
 
@@ -10,6 +12,8 @@ class Eventbox
     args.length <= 1 ? args.first : args
   end
 
+  EventLoopParams = Struct.new :threads, :input_queue, :loop_running, :threadpool, :self, :ctrl_thread
+
   # Create a new Eventbox instance.
   #
   # The same thread which called Eventbox.new, must also call Eventbox#run.
@@ -19,54 +23,48 @@ class Eventbox
   # These calls will block until #run is started.
   def initialize(*args, &block)
     threadpool = Thread
-    loop_running = Queue.new
+
+    # Verify that all public methods are properly wrapped
+    obj = Object.new
+    meths = methods - obj.methods - [:mo, :mutable_object]
+    prmeths = private_methods - obj.private_methods
+    prohib = meths.find do |name|
+      !prmeths.include?(:"__#{name}__")
+    end
+    if prohib
+      meth = method(prohib)
+      raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
+    end
+
+    # Prepare list of prohibited method names for action
+    prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
+    @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
+
+    # Define an annonymous class which is used as execution context for actions.
+    meths = public_methods - Object.new.methods - [:run]
+    selfobj = self
+
+    # When called from action method, this class is used as execution environment for the newly created thread.
+    # All calls to public methods are passed to the calling instance.
+    @action_class = Class.new(self.class) do
+      # Forward method calls.
+      meths.each do |fwmeth|
+        define_method(fwmeth) do |*fwargs, &fwblock|
+          selfobj.send(fwmeth, *fwargs, &fwblock)
+        end
+      end
+    end
 
     @threads = ThreadRegistry.new
     ObjectSpace.define_finalizer(self, @threads.method(:stop_all))
+    @input_queue = Queue.new
+    loop_running = Queue.new
+    elparams = EventLoopParams.new @threads, @input_queue, loop_running, threadpool, WeakRef.new(self)
 
-    @threads.loop_thread = threadpool.new do
-      # TODO Better hide these instance variables for derived classes:
-      @exit_run = nil
-      @threadpool = threadpool
-      @ctrl_thread = Thread.current
-      @input_queue = Queue.new
-
-      # Verify that all public methods are properly wrapped
-      obj = Object.new
-      meths = methods - obj.methods - [:run, :mo, :mutable_object]
-      prmeths = private_methods - obj.private_methods
-      prohib = meths.find do |name|
-        !prmeths.include?(:"__#{name}__")
-      end
-      if prohib
-        meth = method(prohib)
-        raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
-      end
-
-      # Prepare list of prohibited method names for action
-      prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
-      @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
-
-      # Define an annonymous class which is used as execution context for actions.
-      meths = public_methods - Object.new.methods - [:run]
-      selfobj = self
-
-      # When called from action method, this class is used as execution environment for the newly created thread.
-      # All calls to public methods are passed to the calling instance.
-      @action_class = Class.new(self.class) do
-        # Forward method calls.
-        meths.each do |fwmeth|
-          define_method(fwmeth) do |*fwargs, &fwblock|
-            selfobj.send(fwmeth, *fwargs, &fwblock)
-          end
-        end
-      end
-
-      loop_running << true
-      run
-    end
+    @threads.loop_thread = threadpool.new(elparams, &self.class.method(:start_event_loop))
 
     loop_running.deq
+    @ctrl_thread = elparams.ctrl_thread
 
     init(*args, &block)
   end
@@ -144,29 +142,6 @@ class Eventbox
         @stopped = true
       end
     end
-  end
-
-  # Run the event loop.
-  #
-  # The event loop processes the input queue by executing the enqueued method calls.
-  # It can be stopped by #exit_run .
-  def run
-    raise InvalidAccess, "run must be called from the same thread as new" if ::Thread.current!=@ctrl_thread
-
-    until @exit_run
-      begin
-        process_input_queue
-      end until @input_queue.empty?
-
-      repeat
-    end
-
-    @threads.stop_action_threads
-
-    # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
-    # @input_queue.close
-
-    @exit_return_value
   end
 
   def self.with_block_or_def(name, block, &cexec)
@@ -440,6 +415,10 @@ class Eventbox
   @@object_registry = ObjectRegistry.new
 
   def sanity_before_queue(args)
+    self.class.sanity_before_queue(args, @ctrl_thread)
+  end
+
+  def self.sanity_before_queue(args, ctrl_thread)
     pr = proc do |arg|
       case arg
       # If object is already wrapped -> pass through
@@ -449,19 +428,19 @@ class Eventbox
         # Check if the object has been tagged
         case @@object_registry.get_tag(arg)
         when Thread
-          InternalObject.new(arg, @ctrl_thread)
+          InternalObject.new(arg, ctrl_thread)
         when :extern
-          ExternalObject.new(arg, @ctrl_thread)
+          ExternalObject.new(arg, ctrl_thread)
         else
           # Not tagged -> try to deep copy the object
           begin
             dumped = Marshal.dump(arg)
           rescue TypeError
             # Object not copyable -> wrap object as internal or external object
-            if Thread.current == @ctrl_thread
-              InternalObject.new(arg, @ctrl_thread)
+            if Thread.current == ctrl_thread
+              InternalObject.new(arg, ctrl_thread)
             else
-              ExternalObject.new(arg, @ctrl_thread)
+              ExternalObject.new(arg, ctrl_thread)
             end
           else
             Marshal.load(dumped)
@@ -473,6 +452,10 @@ class Eventbox
   end
 
   def sanity_after_queue(args)
+    self.class.sanity_after_queue(args)
+  end
+
+  def self.sanity_after_queue(args)
     pr = proc do |arg|
       case arg
       when InternalObject, ExternalObject
@@ -487,31 +470,60 @@ class Eventbox
   Callback = Struct.new :args, :cbresult
   CallbackResult = Struct.new :res, :cbresult
 
-  def process_input_queue
-    call = @input_queue.deq
+  def self.process_input_queue(params)
+    call = params.input_queue.deq
     case call
     when SyncCall
-      res = self.send("__#{call.name}__", *sanity_after_queue(call.args))
-      res = sanity_before_queue(res)
+      res = params.self.__getobj__.send("__#{call.name}__", *sanity_after_queue(call.args))
+      res = sanity_before_queue(res, params.ctrl_thread)
       call.answer_queue << res
     when YieldCall
-      self.send("__#{call.name}__", *sanity_after_queue(call.args), proc do |*resu|
-        resu = self.class.return_args(resu)
-        resu = sanity_before_queue(resu)
+      params.self.__getobj__.send("__#{call.name}__", *sanity_after_queue(call.args), proc do |*resu|
+        resu = return_args(resu)
+        resu = sanity_before_queue(resu, params.ctrl_thread)
         call.answer_queue << resu
       end) do |*cbargs, &cbresult|
         cbargs = sanity_after_queue(cbargs)
         call.answer_queue << Callback.new(cbargs, cbresult)
       end
     when AsyncCall
-      self.send("__#{call.name}__", *sanity_after_queue(call.args))
+      params.self.__getobj__.__send__("__#{call.name}__", *sanity_after_queue(call.args))
     when CallbackResult
       cbres = sanity_after_queue(call.res)
       call.cbresult.yield(cbres)
     when ThreadFinished
-      @threads.rm_action_thread(call.thread) or raise(ArgumentError, "unknown thread has finished")
+      params.threads.rm_action_thread(call.thread) or raise(ArgumentError, "unknown thread has finished")
     else
       raise ArgumentError, "invalid call type #{call.inspect}"
     end
   end
+
+  # Run the event loop.
+  #
+  # The event loop processes the input queue by executing the enqueued method calls.
+  # It can be stopped by #exit_run .
+  def self.run_event_loop(params)
+    raise InvalidAccess, "run must be called from the same thread as new" if ::Thread.current != params.ctrl_thread
+
+    until @exit_run
+      begin
+        process_input_queue(params)
+      end until params.input_queue.empty?
+
+      params.self.__getobj__.send(:repeat)
+    end
+
+    params.threads.stop_action_threads
+
+    # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
+    # params.input_queue.close
+  end
+
+  def self.start_event_loop(params)
+    params.ctrl_thread = Thread.current
+
+    params.loop_running << true
+    run_event_loop(params)
+  end
+
 end

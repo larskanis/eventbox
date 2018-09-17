@@ -18,7 +18,7 @@ class EventboxTest < Minitest::Test
     if lingering.any?
       puts "#{lingering.length} lingering threads:"
       lingering.each do |th|
-        puts "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) } }"
+        puts "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) || th.backtrace&.first } }"
       end
     end
   end
@@ -45,6 +45,10 @@ class EventboxTest < Minitest::Test
     sync_call def thread
       Thread.current.object_id
     end
+  end
+
+  def test_only_init_with_def
+    TestInitWithDef.new(123, 234)
   end
 
   def test_init_with_def
