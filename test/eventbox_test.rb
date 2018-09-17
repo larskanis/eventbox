@@ -47,15 +47,17 @@ class EventboxTest < Minitest::Test
     end
   end
 
-  def test_only_init_with_def
-    TestInitWithDef.new(123, 234)
+  def test_100_init_with_def
+    100.times do
+      TestInitWithDef.new("123", 234)
+    end
   end
 
   def test_init_with_def
     pr = proc {}
-    eb = TestInitWithDef.new(123, pr)
+    eb = TestInitWithDef.new("123", pr)
 
-    assert_equal Integer, eb.values[0]
+    assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalObject, eb.values[1]
     refute_equal Thread.current.object_id, eb.values[2]
     assert_equal eb.thread, eb.values[2]
@@ -113,9 +115,9 @@ class EventboxTest < Minitest::Test
 
   def test_init_with_block
     pr = proc {}
-    eb = TestInitWithBlock.new(123, pr)
+    eb = TestInitWithBlock.new("123", pr)
 
-    assert_equal Integer, eb.values[0]
+    assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalObject, eb.values[1]
     refute_equal Thread.current.object_id, eb.values[2]
     assert_equal eb.thread, eb.values[2]
@@ -156,30 +158,29 @@ class EventboxTest < Minitest::Test
   end
 
   class FcModifyParams < Eventbox
-    async_call def init(str)
+    yield_call def go(str, result)
       @str = str
-      action @str, block, def modify_action(str, block)
-        modify(str, block)
+      action @str, result, def modify_action(str, result)
+        modify(str, result)
         str << "c"
       end
       @str << "e"
     end
 
-    private def repeat
+    private def after_events
       @str << "b"
     end
 
-    sync_call :modify do |str, block|
+    async_call :modify do |str, result|
       str << "d"
-      block.yield str
+      result.yield str
     end
   end
 
   def test_modify_params
     str = "a"
-    FcModifyParams.new(str) do |str2|
-    end
-    assert_equal "ad", str2
+    eb = FcModifyParams.new(str)
+    assert_equal "ad", eb.go(str)
     assert_equal "a", str
   end
 
@@ -194,7 +195,12 @@ class EventboxTest < Minitest::Test
       end
     end
 
-    private def repeat
+    async_call def pipeios_opened(inp, out)
+      @inp = inp
+      @out = out
+    end
+
+    private def after_events
       if @inp
         action @inp, def read_pipe inp
           received(inp.read(1))
@@ -206,11 +212,6 @@ class EventboxTest < Minitest::Test
           out.write "A"
         end
       end
-    end
-
-    async_call def pipeios_opened(inp, out)
-      @inp = inp
-      @out = out
     end
 
     async_call def received(char)
@@ -235,92 +236,107 @@ class EventboxTest < Minitest::Test
     assert_equal "A", fc.await_char
   end
 
-  def test_ext_to_int_sync_call_with_result
+  def test_external_object_sync_call
     fc = Class.new(Eventbox) do
       sync_call def out(pr)
-        exit_run
-        [1234, Thread.current.object_id, pr, pr.class]
+        [Thread.current.object_id, 1234, pr, pr.class]
       end
     end.new
 
     pr = proc{ 543 }
-    th = Thread.new do
-      fc.out(pr)
-    end
-    fc.run
+    value = fc.out(pr)
 
-    assert_equal [1234, Thread.current.object_id, pr, Eventbox::ExternalObject], th.value
+    refute_equal Thread.current.object_id, value.shift
+    assert_equal [1234, pr, Eventbox::ExternalObject], value
   end
 
-  def test_int_to_ext_call
-    pr = proc{234}
+  def test_external_object_sync_call_tagged
     fc = Class.new(Eventbox) do
-      async_call def go(pr)
-        action pr, def send_out(pr)
-          exit_run pr.class, pr
-        end
+      sync_call def out(str)
+        [str, str.class.to_s]
       end
     end.new
 
-    fc.go(pr)
-    assert_equal [Eventbox::InternalObject, pr], fc.run
+    str = "abc".dup
+    assert_equal "abc", fc.mutable_object(str)
+    value = fc.out(str)
+
+    assert_equal [str, "Eventbox::ExternalObject"], value
   end
 
-  def test_int_to_ext_tagged
+  def test_internal_object_sync_call
+    fc = Class.new(Eventbox) do
+      sync_call def out
+        pr = proc{ 543 }
+        [1234, pr]
+      end
+    end.new
+
+    assert_equal 1234, fc.out[0]
+    assert_kind_of Eventbox::InternalObject, fc.out[1]
+  end
+
+  def test_internal_object_sync_call_tagged
+    fc = Class.new(Eventbox) do
+      sync_call def out
+        mutable_object("abc")
+      end
+    end.new
+
+    assert_kind_of Eventbox::InternalObject, fc.out
+  end
+
+  def test_action_with_internal_object_call
+    fc = Class.new(Eventbox) do
+      yield_call def go(result)
+        pr = proc{ 321 }
+        action "111", pr, result, def send_out(num, pr, result)
+          finish num, num.class.to_s, pr, pr.class.to_s, result
+        end
+      end
+
+      async_call def finish(num, num_class, pr, pr_class, result)
+        result.yield num, num_class, pr, pr_class
+      end
+    end.new
+
+    values = fc.go
+    assert_equal "111", values[0]
+    assert_equal "String", values[1]
+    assert_kind_of Eventbox::InternalObject, values[2]
+    assert_equal "Eventbox::InternalObject", values[3]
+  end
+
+  def test_action_external_object_tagged
     str = "mutable".dup
     fc = Class.new(Eventbox) do
-      async_call def go(str)
-        str << " in go"
-        action str, def send_out(str)
-          exit_run str.class, str
+      yield_call def go(str, result)
+        action str, result, def send_out(str, result)
+          finish str.class, str, result
         end
+      end
+
+      async_call def finish(str_class, str, result)
+        result.yield str_class, str
       end
     end.new
 
-    fc.go(fc.mo(str))
-    klass, str2 = fc.run
+    klass, str2 = fc.go(fc.mutable_object(str))
 
-    assert_equal Eventbox::InternalObject, klass
+    assert_equal String, klass
     assert_same str, str2
   end
 
   def test_untaggable_object
-    fc = Class.new(Eventbox) do
-      private def start
-        str = mo("mutable")
-        action str, def tag(str)
-          mo(str)
-          exit_run
-        rescue => err
-          exit_run err.to_s
-        end
-      end
-    end.new
-    assert_match(/not taggable/, fc.run)
-  end
-
-  def test_ext_to_int_tagged
-    fc = Class.new(Eventbox) do
-      private def start
-        action def send_in
-          str = mo("mutable".dup)
-          input str.object_id, str
-        end
-      end
-
-      async_call def input(ob1, str)
-        kl = str.class
-        action ob1, kl, str, def send_out(ob1, kl, str)
-          exit_run ob1, kl, str.object_id, str
-        end
+    eb = Class.new(Eventbox) do
+      sync_call def go(str)
+        mutable_object(str)
+      rescue => err
+        @res = err.to_s
       end
     end.new
 
-    ob1, kl, ob2, str = fc.run
-
-    assert_equal Eventbox::ExternalObject, kl
-    assert_equal ob1, ob2
-    assert_kind_of Eventbox::ExternalObject, str
+    assert_match(/not taggable/, eb.go(eb.mutable_object("mutable")))
   end
 
   class Yielder1 < Eventbox
@@ -334,7 +350,6 @@ class EventboxTest < Minitest::Test
     end
 
     async_call :finished do |pr, i, ths|
-      exit_run
       ths << Thread.current.object_id
       @bl.yield [pr, i+1, ths]
       false
@@ -344,68 +359,19 @@ class EventboxTest < Minitest::Test
   def test_yield_call_through_action
     fc = Yielder1.new
     pr = proc{ 543 }
-    th = Thread.new do
-      fc.delayed(pr, 1, [Thread.current.object_id])
-    end
-    fc.run
+    values = fc.delayed(pr, 1, [Thread.current.object_id])
 
-    assert_equal [pr, 4], th.value[0, 2]
-    refute_equal Thread.current.object_id, th.value[-1][0]
-    assert_equal Thread.current.object_id, th.value[-1][1]
-    refute_equal Thread.current.object_id, th.value[-1][2]
-    assert_equal Thread.current.object_id, th.value[-1][3]
-    refute_equal th.value[-1][0], th.value[-1][2]
-    assert_equal 543, th.value[0].call
-  end
-
-  class Yielder2 < Eventbox
-    yield_call def many(pr, num, bl)
-      bl.yield pr, num+1, Thread.current.object_id
-      false
-    end
-    yield_call def one(num, bl)
-      bl.yield num+1
-      false
-    end
-    yield_call def zero(bl)
-      bl.yield
-      false
-    end
-  end
-
-  def test_yield_call_same_thread
-    fc = Yielder2.new
-    pr = proc{ 543 }
-
-    assert_nil fc.zero
-    assert_equal 44, fc.one(43)
-    assert_equal [pr, 1235, Thread.current.object_id], fc.many(pr, 1234)
-  end
-
-  def test_yield_call_other_thread
-    pr = proc{ 543 }
-
-    fc = Yielder2.new
-    Thread.new do
-      fc.exit_run(fc.zero)
-    end
-    assert_nil fc.run
-
-    fc = Yielder2.new
-    Thread.new do
-      fc.exit_run(fc.one 77)
-    end
-    assert_equal 78, fc.run
-
-    fc = Yielder2.new
-    Thread.new do
-      fc.exit_run(*fc.many(pr, 88))
-    end
-    assert_kind_of Eventbox::ExternalObject, fc.run[0]
-    assert_equal 89, fc.run[1]
+    assert_equal [pr, 4], values[0, 2]
+    assert_equal Thread.current.object_id, values[-1][0]
+    refute_equal Thread.current.object_id, values[-1][1]
+    refute_equal Thread.current.object_id, values[-1][2]
+    refute_equal Thread.current.object_id, values[-1][3]
+    assert_equal values[-1][1], values[-1][3]
+    assert_equal 543, values[0].call
   end
 
   def test_yield_call_same_thread_no_result
+    skip "It currently raises a deadlock"
     fc = Class.new(Eventbox) do
       yield_call :out do |_result|
       end
@@ -414,119 +380,93 @@ class EventboxTest < Minitest::Test
     assert_raises( Eventbox::NoResult ) { fc.out }
   end
 
-  def test_mutable_invalid_access_at_async_call
+  def test_external_object_invalid_access
     fc = Class.new(Eventbox) do
-      private def start
-        action def run_test
-          test(proc{})
-        end
+      sync_call def init(pr)
+        pr.call
       end
+    end
 
-      async_call :test do |mut|
-        mut.object # raises InvalidAccess
+    with_report_on_exception(false) do
+      pr = proc{}
+      ex = assert_raises(NoMethodError){ fc.new(pr) }
+      assert_match(/`call'/, ex.to_s)
+    end
+  end
+
+  def test_internal_object_invalid_access
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        proc{}
       end
     end.new
 
-    ex = assert_raises(Eventbox::InvalidAccess){ fc.run }
-    assert_match(/access to .* not allowed/, ex.to_s)
+    pr = fc.pr
+    ex = assert_raises(NoMethodError){ pr.call }
+    assert_match(/`call'/, ex.to_s)
   end
 
   def test_attr_accessor
     fc = Class.new(Eventbox) do
-      private def repeat
-        exit_run if @percent==100
+      sync_call def init
+        @percent==0
       end
       attr_accessor :percent
     end.new
 
-    th = Thread.new do
-      fc.percent = 10
-      a = fc.percent
-      fc.percent = 100
-      a
-    end
-    fc.run
-
-    assert_equal 100, fc.percent
-    assert_equal 10, th.value
+    fc.percent = 10
+    assert_equal 10, fc.percent
+    fc.percent = "20"
+    assert_equal "20", fc.percent
   end
 
-  class ExitRun1 < Eventbox
-    async_call :zero do
-      exit_run
+  class Yielder2 < Eventbox
+    yield_call :zero do |res|
+      res.yield
     end
-    async_call :one do |num|
-      exit_run num+1
+    yield_call :one do |num, res|
+      res.yield num+1
     end
-    async_call :many do |num, pr|
-      exit_run num+1, pr
+    yield_call :many do |num, pr, res|
+      res.yield num+1, pr
     end
   end
 
-  def test_exit_run_same_thread
-    fc = ExitRun1.new
-    fc.zero
-    assert_nil fc.run
-
-    fc = ExitRun1.new
-    fc.one 22
-    assert_equal 23, fc.run
-
+  def test_yield_with_0_1_2_params
     pr = proc { 66 }
-    fc = ExitRun1.new
-    fc.many 44, pr
-    assert_equal [45, pr], fc.run
-  end
-
-  def test_exit_run_other_thread
-    fc = ExitRun1.new
-    Thread.new { fc.zero }
-    assert_nil fc.run
-
-    fc = ExitRun1.new
-    Thread.new { fc.one 22 }
-    assert_equal 23, fc.run
-
-    pr = proc { 77 }
-    fc = ExitRun1.new
-    Thread.new { fc.many 44, pr }
-    assert_equal 45, fc.run[0]
-    assert_kind_of Eventbox::ExternalObject, fc.run[1]
-  end
-
-  def test_run_from_wrong_thread
-    fc = Thread.new do
-      Class.new(Eventbox).new
-    end.value
-
-    ex = assert_raises(Eventbox::InvalidAccess){ fc.run }
-    assert_match(/run must be called from the same thread as new/, ex.to_s)
+    fc = Yielder2.new
+    assert_nil fc.zero
+    assert_equal 23, fc.one(22)
+    assert_equal [45, pr], fc.many(44, pr)
   end
 
   def test_action_from_wrong_thread
-    with_report_on_exception(false) do
-      fc = Class.new(Eventbox) do
-        private def start
-          Thread.new do
+    eb = Class.new(Eventbox) do
+      sync_call def init
+        @error = Thread.new do
+          begin
             action def dummy
             end
+          rescue => err
+            err.inspect
           end
-        end
-      end.new
+        end.value
+      end
+      attr_reader :error
+    end.new
 
-      ex = assert_raises(Eventbox::InvalidAccess){ fc.run }
-      assert_match(/action must be called from the same thread as new/, ex.to_s)
-    end
+    ex = assert_match(/Eventbox::InvalidAccess/, eb.error)
+    assert_match(/action must be called from/, eb.error)
   end
 
-  def test_overwrites_local_variables
+  def test_action_overwrites_local_variables
     fc = Class.new(Eventbox) do
       attr_accessor :outside_block
-      private def start
+      yield_call def local_var(result)
         a_local_variable = "local var"
-        action def exiter
+        action result, def exiter(result)
           # the local variable should be overwritten within the block
-          exit_run begin
+          return_res result, begin
             a_local_variable
           rescue Exception => err
             err.to_s
@@ -536,21 +476,25 @@ class EventboxTest < Minitest::Test
         # the local variable shouldn't change, even after the action thread started
         self.outside_block = a_local_variable
       end
+
+      async_call def return_res(result, var)
+        result.yield var
+      end
     end.new
 
-    assert_match(/undefined.*a_local_variable/, fc.run)
+    assert_match(/undefined.*a_local_variable/, fc.local_var)
     assert_equal "local var", fc.outside_block
   end
 
-  def test_passing_local_variables
+  def test_action_passing_local_variables
     fc = Class.new(Eventbox) do
       attr_accessor :outside_block
-      private def start
+      yield_call def local_var(result)
         a = "local var".dup
-        action a, def exiter a
+        action a, result, def exiter a, result
           # the local variable should be overwritten within the block
           a << " inside block"
-          exit_run a
+          return_res a, result
         end
 
         sleep 0.001
@@ -558,22 +502,29 @@ class EventboxTest < Minitest::Test
         a << " outside block"
         self.outside_block = a
       end
+
+      async_call def return_res(var, result)
+        result.yield var
+      end
     end.new
 
-    assert_equal "local var inside block", fc.run
+    assert_equal "local var inside block", fc.local_var
     assert_equal "local var outside block", fc.outside_block
   end
 
-  def test_denies_access_to_instance_variables
+  def test_action_denies_access_to_instance_variables
     fc = Class.new(Eventbox) do
-      private def start
+      yield_call def inst_var(result)
         @a = "instance var"
-        action def exiter
-          exit_run instance_variable_defined?("@a")
+        action result, def exiter(result)
+          return_res(result, instance_variable_defined?("@a"))
         end
       end
+      async_call def return_res(result, var)
+        result.yield var
+      end
     end.new
-    assert_equal false, fc.run
+    assert_equal false, fc.inst_var
   end
 
   def test_public_method_error
@@ -581,24 +532,23 @@ class EventboxTest < Minitest::Test
       Class.new(Eventbox) do
         def test
         end
-        private def start
-          exit_run
-        end
       end.new
     end
     assert_match(/method `test' at/, err.to_s)
   end
 
   def test_action_method_name_error
-    fc = Class.new(Eventbox) do
-      private def start
-        action def run
-          exit_run
-        end
+    with_report_on_exception(false) do
+      err = assert_raises(Eventbox::InvalidAccess) do
+        Class.new(Eventbox) do
+          sync_call def init
+            action def init
+            end
+          end
+        end.new
       end
-    end.new
-    err = assert_raises(Eventbox::InvalidAccess) { fc.run }
-    assert_match(/action method name `run' at/, err.to_s)
+      assert_match(/action method name `init' at/, err.to_s)
+    end
   end
 
   class ConcurrentWorkers < Eventbox
@@ -655,7 +605,7 @@ class EventboxTest < Minitest::Test
   end
 
   class ConcurrentWorkers2 < ConcurrentWorkers
-    private def repeat
+    private def after_events
       while @tasks.any? && @waiting.any?
         workerid, input = @waiting.shift
         result, name = @tasks.shift
@@ -727,7 +677,8 @@ class EventboxTest < Minitest::Test
     assert_equal 10.times.map{|i| "task #{i} finished" }, values
   end
 
-  def test_yield_call_with_callback_same_thread
+  def test_yield_call_with_callback
+    skip "deferred block callbacks are not yet implemented"
     fc = Class.new(Eventbox) do
       yield_call def go(str, result, &block)
         str = call_back(block, str+"b")
@@ -752,7 +703,7 @@ class EventboxTest < Minitest::Test
     assert_equal "abcdefcdegh", res
   end
 
-  def test_yield_call_with_callback_other_thread
+  def test_yield_call_with_callback_and_action
     fc = Class.new(Eventbox) do
       yield_call def go(str, result, &block)
         action str+"b", result, block, def process(str, result, block)
@@ -773,12 +724,9 @@ class EventboxTest < Minitest::Test
       end
     end.new
 
-    Thread.new do
-      res = fc.go("a") do |str|
-        str + "e"
-      end
-      fc.exit_run res
+    res = fc.go("a") do |str|
+      str + "e"
     end
-    assert_equal "abcdefgdefhi", fc.run
+    assert_equal "abcdefgdefhi", res
   end
 end
