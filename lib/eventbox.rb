@@ -9,6 +9,7 @@ class Eventbox
 
   class InvalidAccess < RuntimeError; end
   class NoResult < RuntimeError; end
+  class MultipleResults < RuntimeError; end
 
   private
 
@@ -166,15 +167,21 @@ class Eventbox
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
       if ::Thread.current==@ctrl_thread
+        result = nil
         unbound_method.bind(self).call(*args, proc do |*res|
-          return return_args(res)
+          raise MultipleResults, "received multiple results for method `#{name}'" if result
+          result = res
         end) do |*cbargs, &cbresult|
           cbres = cb.yield(*cbargs)
           cbresult.yield(cbres)
         end
-        # The call didn't immediately yield a result, but the result can be deferred and yielded by a later event.
-        @event_loop.run_event_loop
-        raise NoResult, "no result yielded in `#{name}'"
+        if result
+          return return_args(result)
+        else
+          # The call didn't immediately yield a result, but the result could be deferred and yielded by a later event.
+          # TODO
+          raise NoResult, "no result yielded in `#{name}'"
+        end
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
