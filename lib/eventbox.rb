@@ -91,7 +91,7 @@ class Eventbox
   Callback = Struct.new :box, :args, :cbresult, :block
   CallbackResult = Struct.new :box, :res, :cbresult
 
-  AsyncCall = Struct.new :box, :name, :args
+  AsyncCall = Struct.new :box, :name, :args, :block
 
   # Define a method for asynchronous (fire-and-forget) calls.
   #
@@ -104,20 +104,22 @@ class Eventbox
   # Access to the wrapped object from the control thread is denied, but the wrapper can be stored and passed to other actions.
   def self.async_call(name, &block)
     unbound_method = nil
-    with_block_or_def(name, block) do |*args|
+    with_block_or_def(name, block) do |*args, &cb|
       if ::Thread.current==@ctrl_thread
         # Use the correct method within the class hierarchy, instead of just self.send(*args).
         # Otherwise super() would start an infinite recursion.
-        unbound_method.bind(self).call(*args)
+        unbound_method.bind(self).call(*args) do |*cbargs|
+         cb.yield(*cbargs)
+        end
       else
         args = sanity_before_queue(args)
-        @input_queue << AsyncCall.new(self, name, args)
+        @input_queue << AsyncCall.new(self, name, args, cb)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
   end
 
-  SyncCall = Struct.new :box, :name, :args, :answer_queue
+  SyncCall = Struct.new :box, :name, :args, :answer_queue, :block
 
   # Define a method for synchronous calls.
   #
@@ -128,15 +130,16 @@ class Eventbox
   # The return value is therefore handled similar to parameters to #action .
   def self.sync_call(name, &block)
     unbound_method = nil
-    with_block_or_def(name, block) do |*args|
+    with_block_or_def(name, block) do |*args, &cb|
       if ::Thread.current==@ctrl_thread
-        unbound_method.bind(self).call(*args)
+        unbound_method.bind(self).call(*args) do |*cbargs|
+          cb.yield(*cbargs)
+        end
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
-        @input_queue << SyncCall.new(self, name, args, answer_queue)
-        args = answer_queue.deq
-        sanity_after_queue(args)
+        @input_queue << SyncCall.new(self, name, args, answer_queue, cb)
+        callback_loop(answer_queue)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
@@ -166,30 +169,32 @@ class Eventbox
         if result
           return return_args(result)
         else
-          # The call didn't immediately yield a result, but the result could be deferred and yielded by a later event.
-          # TODO
           raise NoResult, "no result yielded in `#{name}'"
         end
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
         @input_queue << YieldCall.new(self, name, args, answer_queue, cb)
-        loop do
-          rets = answer_queue.deq
-          case rets
-          when Callback
-            cbargs = sanity_after_queue(rets.args)
-            cbres = rets.block.yield(*cbargs)
-            cbres = sanity_before_queue(cbres)
-            @input_queue << CallbackResult.new(rets.box, cbres, rets.cbresult)
-          else
-            answer_queue.close
-            return sanity_after_queue(rets)
-          end
-        end
+        callback_loop(answer_queue)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
+  end
+
+  def callback_loop(answer_queue)
+    loop do
+      rets = answer_queue.deq
+      case rets
+      when Callback
+        cbargs = sanity_after_queue(rets.args)
+        cbres = rets.block.yield(*cbargs)
+        cbres = sanity_before_queue(cbres)
+        @input_queue << CallbackResult.new(rets.box, cbres, rets.cbresult)
+      else
+        answer_queue.close
+        return sanity_after_queue(rets)
+      end
+    end
   end
 
   def self.attr_writer(name)

@@ -711,30 +711,95 @@ class EventboxTest < Minitest::Test
     assert_equal 10.times.map{|i| "task #{i} finished" }, values
   end
 
-  def test_yield_call_with_callback
-    skip "doesn't work yet"
+  def test_external_async_call_with_deferred_callback
     fc = Class.new(Eventbox) do
-      yield_call def go(str, result, &block)
-        str = call_back(block, str+"b")
-        str = call_back(block, str+"f")
-        finish(result, str+"g")
+      async_call def go(str, &block)
+        @block = block
+        @str = str+"b"
       end
 
-      yield_call def call_back(block, str, result)
-        block.yield(str+"c") do |cbstr|
+      yield_call def call_block(result)
+        @block.yield(@str+"c") do |cbstr|
           result.yield(cbstr+"e")
         end
       end
+    end.new
 
-      async_call def finish(result, str)
-       result.yield str+"h"
+    fc.go("a") do |str|
+      str + "d"
+    end
+
+    assert_equal "abcde", fc.call_block
+  end
+
+  def test_external_sync_call_with_deferred_callback
+    fc = Class.new(Eventbox) do
+      sync_call def go(str, &block)
+        @block = block
+        @str = str+"b"
+      end
+
+      sync_call def call_block(&block)
+        @block.yield(@str+"c") do |cbstr|
+          @str = cbstr+"e"
+        end
+        123
+      end
+
+      attr_reader :str
+    end.new
+
+    fc.go("a") do |str|
+      str + "d"
+    end
+
+    assert_equal 123, fc.call_block
+    assert_equal "abcde", fc.str
+  end
+
+  def test_internal_async_call_with_deferred_callback
+    fc = Class.new(Eventbox) do
+      yield_call def go(str, result)
+        with_block(str+"b", result) do |cbstr|
+          cbstr+"d"
+        end
+      end
+
+      async_call def with_block(str, result, &block)
+        str = block.yield(str+"c")
+        result.yield(str+"e")
       end
     end.new
 
     res = fc.go("a") do |str|
       str + "d"
     end
-    assert_equal "abcdefcdegh", res
+
+    assert_equal "abcde", res
+  end
+
+  def test_internal_sync_call_with_deferred_callback
+    fc = Class.new(Eventbox) do
+      yield_call def go(str, result)
+        @call_res = with_block(str+"b", result) do |cbstr|
+          cbstr+"d"
+        end
+      end
+
+      sync_call def with_block(str, result, &block)
+        str = block.yield(str+"c")
+        result.yield(str+"e")
+        str+"f"
+      end
+      attr_reader :call_res
+    end.new
+
+    res = fc.go("a") do |str|
+      str + "d"
+    end
+
+    assert_equal "abcde", res
+    assert_equal "abcdf", fc.call_res
   end
 
   def test_yield_call_with_callback_and_action

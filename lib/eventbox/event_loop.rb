@@ -42,9 +42,20 @@ class Eventbox
       loop do
         call = @input_queue.deq
         latest_call = call
+
+        cb_handler = proc do |*cbargs, &cbresult|
+          cbargs = sanity_after_queue(cbargs)
+          case latest_call
+          when YieldCall, SyncCall
+            latest_call.answer_queue << Callback.new(call.box, cbargs, cbresult, call.block)
+          else
+            raise(InvalidAccess, "closure defined by `#{call.name}' was yielded by `#{latest_call.name}', which must a sync_call or yield_call")
+          end
+        end
+
         case call
         when SyncCall
-          res = call.box.send("__#{call.name}__", *sanity_after_queue(call.args))
+          res = call.box.send("__#{call.name}__", *sanity_after_queue(call.args), &cb_handler)
           res = sanity_before_queue(res)
           call.answer_queue << res
         when YieldCall
@@ -55,17 +66,9 @@ class Eventbox
             resu = return_args(resu)
             resu = sanity_before_queue(resu)
             call.answer_queue << resu
-          end) do |*cbargs, &cbresult|
-            cbargs = sanity_after_queue(cbargs)
-            case latest_call
-            when YieldCall, SyncCall
-              latest_call.answer_queue << Callback.new(call.box, cbargs, cbresult, call.block)
-            else
-              raise(InvalidAccess, "closure defined by `#{call.name}' was yielded by `#{latest_call.name}', which must a sync_call or yield_call")
-            end
-          end
+          end, &cb_handler)
         when AsyncCall
-          call.box.send("__#{call.name}__", *sanity_after_queue(call.args))
+          call.box.send("__#{call.name}__", *sanity_after_queue(call.args), &cb_handler)
         when CallbackResult
           cbres = sanity_after_queue(call.res)
           call.cbresult.yield(cbres)
