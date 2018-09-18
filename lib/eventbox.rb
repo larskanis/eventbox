@@ -99,7 +99,7 @@ class Eventbox
     end
   end
 
-  Callback = Struct.new :box, :args, :cbresult
+  Callback = Struct.new :box, :args, :cbresult, :block
   CallbackResult = Struct.new :box, :res, :cbresult
 
   AsyncCall = Struct.new :box, :name, :args
@@ -153,7 +153,7 @@ class Eventbox
     unbound_method = self.instance_method("__#{name}__")
   end
 
-  YieldCall = Struct.new :box, :name, :args, :answer_queue
+  YieldCall = Struct.new :box, :name, :args, :answer_queue, :block
 
   # Define a method for synchronous calls with asynchronous result.
   #
@@ -172,17 +172,19 @@ class Eventbox
           cbres = cb.yield(*cbargs)
           cbresult.yield(cbres)
         end
-        raise NoResult, "no result yielded"
+        # The call didn't immediately yield a result, but the result can be deferred and yielded by a later event.
+        @event_loop.run_event_loop
+        raise NoResult, "no result yielded in `#{name}'"
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
-        @input_queue << YieldCall.new(self, name, args, answer_queue)
+        @input_queue << YieldCall.new(self, name, args, answer_queue, cb)
         loop do
           rets = answer_queue.deq
           case rets
           when Callback
             cbargs = sanity_after_queue(rets.args)
-            cbres = cb.yield(*cbargs)
+            cbres = rets.block.yield(*cbargs)
             cbres = sanity_before_queue(cbres)
             @input_queue << CallbackResult.new(rets.box, cbres, rets.cbresult)
           else

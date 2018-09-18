@@ -644,11 +644,11 @@ class EventboxTest < Minitest::Test
     end
 
     yield_call :process do |name, result, &block|
-      result.yield
       @tasks << [block, name]
+      result.yield
     end
 
-    async_call :task_finished do |workerid, result|
+    sync_call :task_finished do |workerid, result|
       @working.delete(workerid).yield result
       if @tasks.empty? && @working.empty?
         @notify_when_finished.each(&:yield)
@@ -678,7 +678,6 @@ class EventboxTest < Minitest::Test
   end
 
   def test_yield_call_with_callback
-    skip "deferred block callbacks are not yet implemented"
     fc = Class.new(Eventbox) do
       yield_call def go(str, result, &block)
         str = call_back(block, str+"b")
