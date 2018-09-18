@@ -76,18 +76,6 @@ class Eventbox
   def init(*args)
   end
 
-  # This method is executed whenever one or more input events have been processed.
-  #
-  # Derive this method for any polling-like activity.
-  def after_events
-    # can be derived
-  end
-
-  # This method is executed whenever one input events have been processed.
-  def after_each_event
-    # can be derived
-  end
-
   def self.with_block_or_def(name, block, &cexec)
     if block
       define_method(name, &cexec)

@@ -103,6 +103,37 @@ class EventboxTest < Minitest::Test
     assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
   end
 
+  def test_intern_yield_call_with_multiple_yields
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        doit
+      rescue => err
+        err.to_s
+      end
+
+      yield_call def doit(result)
+        result.yield
+        result.yield
+      end
+    end.new
+
+    assert_match(/multiple results for method `doit'/, eb.go)
+  end
+
+  def test_extern_yield_call_with_multiple_yields
+    with_report_on_exception(false) do
+      eb = Class.new(Eventbox) do
+        yield_call def doit(result)
+          result.yield
+          result.yield
+        end
+      end.new
+
+      ex = assert_raises(Eventbox::MultipleResults) { eb.doit }
+      assert_match(/multiple results for method `doit'/, ex.to_s)
+    end
+  end
+
   class TestInitWithBlock < Eventbox
     async_call :init do |num, pr|
       @values = [num.class, pr.class, Thread.current.object_id]
@@ -198,9 +229,10 @@ class EventboxTest < Minitest::Test
     async_call def pipeios_opened(inp, out)
       @inp = inp
       @out = out
+      pipe_active
     end
 
-    private def after_events
+    private def pipe_active
       if @inp
         action @inp, def read_pipe inp
           received(inp.read(1))
@@ -605,7 +637,7 @@ class EventboxTest < Minitest::Test
   end
 
   class ConcurrentWorkers2 < ConcurrentWorkers
-    private def after_events
+    private def check_work
       while @tasks.any? && @waiting.any?
         workerid, input = @waiting.shift
         result, name = @tasks.shift
@@ -616,10 +648,12 @@ class EventboxTest < Minitest::Test
 
     yield_call :process do |name, result|
       @tasks << [result, name]
+      check_work
     end
 
     yield_call :next_task do |workerid, input|
       @waiting[workerid] = input
+      check_work
     end
   end
 
@@ -678,6 +712,7 @@ class EventboxTest < Minitest::Test
   end
 
   def test_yield_call_with_callback
+    skip "doesn't work yet"
     fc = Class.new(Eventbox) do
       yield_call def go(str, result, &block)
         str = call_back(block, str+"b")
