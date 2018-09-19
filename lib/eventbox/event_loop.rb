@@ -58,6 +58,8 @@ class Eventbox
       end
 
       case call
+      when FalseClass
+        return false
       when SyncCall
         res = call.box.send("__#{call.name}__", *sanity_after_queue(call.args), &cb_handler)
         res = sanity_before_queue(res)

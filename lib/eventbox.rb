@@ -113,6 +113,7 @@ class Eventbox
       else
         args = sanity_before_queue(args)
         @input_queue << AsyncCall.new(self, name, args, cb)
+        @input_queue << false
       end
     end
     unbound_method = self.instance_method("__#{name}__")
@@ -138,6 +139,7 @@ class Eventbox
         args = sanity_before_queue(args)
         answer_queue = Queue.new
         @input_queue << SyncCall.new(self, name, args, answer_queue, cb)
+        @input_queue << false
         callback_loop(answer_queue)
       end
     end
@@ -162,6 +164,7 @@ class Eventbox
         args = sanity_before_queue(args)
         answer_queue = Queue.new
         @input_queue << YieldCall.new(self, name, args, answer_queue, cb)
+        @input_queue << false
         callback_loop(answer_queue)
       end
     end
