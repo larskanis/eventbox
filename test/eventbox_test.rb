@@ -401,16 +401,6 @@ class EventboxTest < Minitest::Test
     assert_equal 543, values[0].call
   end
 
-  def test_yield_call_same_thread_no_result
-    skip "It currently raises a deadlock"
-    fc = Class.new(Eventbox) do
-      yield_call :out do |_result|
-      end
-    end.new
-
-    assert_raises( Eventbox::NoResult ) { fc.out }
-  end
-
   def test_external_object_invalid_access
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
