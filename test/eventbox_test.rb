@@ -430,7 +430,7 @@ class EventboxTest < Minitest::Test
   def test_attr_accessor
     fc = Class.new(Eventbox) do
       sync_call def init
-        @percent==0
+        @percent = 0
       end
       attr_accessor :percent
     end.new
