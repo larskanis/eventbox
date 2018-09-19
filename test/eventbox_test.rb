@@ -1,25 +1,27 @@
 require_relative "test_helper"
 
 class EventboxTest < Minitest::Test
+  include Minitest::Hooks
+
   def test_that_it_has_a_version_number
     assert_match(/\A\d+\.\d+\.\d+/, ::Eventbox::VERSION)
   end
 
-  def setup
+  def before_all
     @start_threads = Thread.list
   end
 
-  def teardown
+  def after_all
     # Trigger ObjectRegistry#untag and thread stopping
     GC.start
     sleep 0.1 if (Thread.list - @start_threads).any?
 
     lingering = Thread.list - @start_threads
     if lingering.any?
-      puts "#{lingering.length} lingering threads:"
-      lingering.each do |th|
-        puts "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) || th.backtrace&.first } }"
-      end
+      warn "Warning: #{lingering.length} lingering threads"
+#       lingering.each do |th|
+#         warn "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) || th.backtrace&.first } }"
+#       end
     end
   end
 
