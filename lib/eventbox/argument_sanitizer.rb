@@ -38,45 +38,47 @@ class Eventbox
       args.length <= 1 ? args.first : args
     end
 
-    def sanity_before_queue(args, ctrl_thread=@ctrl_thread)
-      pr = proc do |arg|
-        case arg
-        # If object is already wrapped -> pass through
-        when InternalObject, ExternalObject
-          arg
+    def sanity_before_queue2(arg, ctrl_thread=@ctrl_thread)
+      case arg
+      # If object is already wrapped -> pass through
+      when InternalObject, ExternalObject
+        arg
+      else
+        # Check if the object has been tagged
+        case ObjectRegistry.get_tag(arg)
+        when Thread
+          InternalObject.new(arg, ctrl_thread)
+        when :extern
+          ExternalObject.new(arg, ctrl_thread)
         else
-          # Check if the object has been tagged
-          case ObjectRegistry.get_tag(arg)
-          when Thread
-            InternalObject.new(arg, ctrl_thread)
-          when :extern
-            ExternalObject.new(arg, ctrl_thread)
+          # Not tagged -> try to deep copy the object
+          begin
+            dumped = Marshal.dump(arg)
+          rescue TypeError
+            # Object not copyable -> wrap object as internal or external object
+            sanity_before_queue2(mutable_object(arg))
           else
-            # Not tagged -> try to deep copy the object
-            begin
-              dumped = Marshal.dump(arg)
-            rescue TypeError
-              # Object not copyable -> wrap object as internal or external object
-              pr.call(mutable_object(arg))
-            else
-              Marshal.load(dumped)
-            end
+            Marshal.load(dumped)
           end
         end
       end
-      args.is_a?(Array) ? args.map(&pr) : pr.call(args)
+    end
+
+    def sanity_before_queue(args)
+      args.is_a?(Array) ? args.map(&method(:sanity_before_queue2)) : sanity_before_queue2(args)
+    end
+
+    def sanity_after_queue2(arg)
+      case arg
+      when InternalObject, ExternalObject
+        arg.access_allowed? ? arg.object : arg
+      else
+        arg
+      end
     end
 
     def sanity_after_queue(args)
-      pr = proc do |arg|
-        case arg
-        when InternalObject, ExternalObject
-          arg.access_allowed? ? arg.object : arg
-        else
-          arg
-        end
-      end
-      args.is_a?(Array) ? args.map(&pr) : pr.call(args)
+      args.is_a?(Array) ? args.map(&method(:sanity_after_queue2)) : sanity_after_queue2(args)
     end
 
     public
