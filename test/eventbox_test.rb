@@ -126,9 +126,12 @@ class EventboxTest < Minitest::Test
           result.yield
           result.yield
         end
+        sync_call def trigger
+          # Make sure the event loop has processed both yields
+        end
       end.new
 
-      ex = assert_raises(Eventbox::MultipleResults) { eb.doit }
+      ex = assert_raises(Eventbox::MultipleResults) { eb.doit; eb.trigger }
       assert_match(/multiple results for method `doit'/, ex.to_s)
     end
   end
