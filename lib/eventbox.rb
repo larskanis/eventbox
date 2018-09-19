@@ -8,7 +8,6 @@ class Eventbox
   include ArgumentSanitizer
 
   class InvalidAccess < RuntimeError; end
-  class NoResult < RuntimeError; end
   class MultipleResults < RuntimeError; end
 
   private
@@ -158,19 +157,7 @@ class Eventbox
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
       if ::Thread.current==@ctrl_thread
-        result = nil
-        unbound_method.bind(self).call(*args, proc do |*res|
-          raise MultipleResults, "received multiple results for method `#{name}'" if result
-          result = res
-        end) do |*cbargs, &cbresult|
-          cbres = cb.yield(*cbargs)
-          cbresult.yield(cbres)
-        end
-        if result
-          return return_args(result)
-        else
-          raise NoResult, "no result yielded in `#{name}'"
-        end
+        raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new

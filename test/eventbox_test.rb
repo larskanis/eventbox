@@ -103,7 +103,7 @@ class EventboxTest < Minitest::Test
     assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
   end
 
-  def test_intern_yield_call_with_multiple_yields
+  def test_intern_yield_call_fails
     eb = Class.new(Eventbox) do
       sync_call def go
         doit
@@ -113,11 +113,10 @@ class EventboxTest < Minitest::Test
 
       yield_call def doit(result)
         result.yield
-        result.yield
       end
     end.new
 
-    assert_match(/multiple results for method `doit'/, eb.go)
+    assert_match(/`doit' can not be called internally/, eb.go)
   end
 
   def test_extern_yield_call_with_multiple_yields
