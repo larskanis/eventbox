@@ -843,13 +843,14 @@ class EventboxTest < Minitest::Test
   def test_queue
     q = TestQueue.new
 
-    # Start one thread which enqueues values
-    Thread.new do
-      1000.times do |i|
-        q.enq i
+    # Start two threads which enqueues values
+    2.times do |s|
+      Thread.new do
+        500.times do |i|
+          q.enq(2 * i + s)
+        end
+        q.enq nil
       end
-      q.enq nil
-      q.enq nil
     end
 
     # Start two thread which fetch values concurrently
