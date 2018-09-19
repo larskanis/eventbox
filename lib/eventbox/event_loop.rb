@@ -52,8 +52,10 @@ class Eventbox
         case @latest_call
         when YieldCall, SyncCall
           @latest_call.answer_queue << Callback.new(call.box, cbargs, cbresult, call.block)
-        else
+        when AsyncCall
           raise(InvalidAccess, "closure defined by `#{call.name}' was yielded by `#{@latest_call.name}', which must a sync_call or yield_call")
+        else
+          raise(InvalidAccess, "closure defined by `#{call.name}' was yielded by event #{@latest_call.inspect}', but should have been by a sync_call or yield_call")
         end
       end
 
