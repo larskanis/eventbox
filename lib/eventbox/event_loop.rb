@@ -2,21 +2,28 @@ class Eventbox
   class EventLoop
     include ArgumentSanitizer
 
-    def initialize(input_queue, loop_running, threadpool)
-      @input_queue = input_queue
-      @loop_running = loop_running
-      @threadpool = threadpool
+    attr_reader :input_queue
 
-      threadpool.new(&method(:start))
+    def initialize(threadpool)
+      @threadpool = threadpool
+      @action_threads = {}
+      @ctrl_thread = nil
+
+      @input_queue = YieldingQueue.new do |call|
+        @latest_call = call
+        @ctrl_thread = Thread.current
+        break if process_one_call(call)
+        @latest_call = nil
+        @ctrl_thread = nil
+      end
     end
 
-    def start
-      @ctrl_thread = Thread.current
-      @action_threads = {}
+    def event_loop
+      self
+    end
 
-      @loop_running << @ctrl_thread
-
-      run_event_loop
+    def shutdown(object_id=nil)
+#       warn "shutdown called for object #{object_id}"
 
       # terminate all running action threads
       @action_threads.each do |th, _|
@@ -25,12 +32,12 @@ class Eventbox
 
       # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
       # @input_queue.close
+
+      nil
     end
 
-    def shutdown(object_id=nil)
-#       warn "shutdown called for object #{object_id}"
-      @input_queue << :shutdown
-      nil
+    def internal_thread?
+      Thread.current==@ctrl_thread
     end
 
     # Run the event loop.
@@ -60,8 +67,6 @@ class Eventbox
       end
 
       case call
-      when FalseClass
-        return false
       when SyncCall
         res = call.box.send("__#{call.name}__", *sanity_after_queue(call.args), &cb_handler)
         res = sanity_before_queue(res)
@@ -82,8 +87,6 @@ class Eventbox
         call.cbresult.yield(cbres)
       when ThreadFinished
         @action_threads.delete(call.thread) or raise(ArgumentError, "unknown thread has finished")
-      when :shutdown
-        return true
       else
         raise ArgumentError, "invalid call type #{call.inspect}"
       end

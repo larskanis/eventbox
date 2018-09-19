@@ -1,5 +1,6 @@
 require "eventbox/argument_sanitizer"
 require "eventbox/event_loop"
+require "eventbox/yielding_queue"
 require "eventbox/object_registry"
 
 class Eventbox
@@ -57,17 +58,17 @@ class Eventbox
 
     # Run the event loop thread in a separate class.
     # Otherwise it would block GC'ing of self.
-    @input_queue = Queue.new
-    loop_running = Queue.new
-    @event_loop = EventLoop.new(@input_queue, loop_running, threadpool)
+    @event_loop = EventLoop.new(threadpool)
     ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
 
-    @ctrl_thread = loop_running.deq
+    @input_queue = @event_loop.input_queue
 
     init(*args, &block)
   end
 
   private
+
+  attr_reader :event_loop
 
   # This method is executed when the event loop is up and running.
   #
@@ -104,7 +105,7 @@ class Eventbox
   def self.async_call(name, &block)
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
-      if ::Thread.current==@ctrl_thread
+      if @event_loop.internal_thread?
         # Use the correct method within the class hierarchy, instead of just self.send(*args).
         # Otherwise super() would start an infinite recursion.
         unbound_method.bind(self).call(*args) do |*cbargs|
@@ -113,7 +114,6 @@ class Eventbox
       else
         args = sanity_before_queue(args)
         @input_queue << AsyncCall.new(self, name, args, cb)
-        @input_queue << false
       end
     end
     unbound_method = self.instance_method("__#{name}__")
@@ -131,7 +131,7 @@ class Eventbox
   def self.sync_call(name, &block)
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
-      if ::Thread.current==@ctrl_thread
+      if @event_loop.internal_thread?
         unbound_method.bind(self).call(*args) do |*cbargs|
           cb.yield(*cbargs)
         end
@@ -139,7 +139,6 @@ class Eventbox
         args = sanity_before_queue(args)
         answer_queue = Queue.new
         @input_queue << SyncCall.new(self, name, args, answer_queue, cb)
-        @input_queue << false
         callback_loop(answer_queue)
       end
     end
@@ -158,13 +157,12 @@ class Eventbox
   def self.yield_call(name, &block)
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
-      if ::Thread.current==@ctrl_thread
+      if @event_loop.internal_thread?
         raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
         @input_queue << YieldCall.new(self, name, args, answer_queue, cb)
-        @input_queue << false
         callback_loop(answer_queue)
       end
     end
@@ -235,7 +233,7 @@ class Eventbox
   #   end
   #
   def action(*args, method_name)
-    raise InvalidAccess, "action must be called from the event loop thread" if ::Thread.current!=@ctrl_thread
+    raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
 
     sandbox = @action_class.allocate
     if block_given?

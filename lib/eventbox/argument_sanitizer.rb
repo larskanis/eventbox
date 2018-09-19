@@ -1,12 +1,12 @@
 class Eventbox
   class InternalObject < Object
-    def initialize(object, thread)
+    def initialize(object, event_loop)
       @object = object
-      @thread = thread
+      @event_loop = event_loop
     end
 
     def access_allowed?
-      ::Thread.current == @thread
+      @event_loop.internal_thread?
     end
 
     def object
@@ -16,13 +16,13 @@ class Eventbox
   end
 
   class ExternalObject < Object
-    def initialize(object, thread)
+    def initialize(object, event_loop)
       @object = object
-      @thread = thread
+      @event_loop = event_loop
     end
 
     def access_allowed?
-      ::Thread.current != @thread
+      !@event_loop.internal_thread?
     end
 
     def object
@@ -38,7 +38,7 @@ class Eventbox
       args.length <= 1 ? args.first : args
     end
 
-    def sanity_before_queue2(arg, ctrl_thread=@ctrl_thread)
+    def sanity_before_queue2(arg)
       case arg
       # If object is already wrapped -> pass through
       when InternalObject, ExternalObject
@@ -46,10 +46,10 @@ class Eventbox
       else
         # Check if the object has been tagged
         case ObjectRegistry.get_tag(arg)
-        when Thread
-          InternalObject.new(arg, ctrl_thread)
+        when EventLoop
+          InternalObject.new(arg, event_loop)
         when :extern
-          ExternalObject.new(arg, ctrl_thread)
+          ExternalObject.new(arg, event_loop)
         else
           # Not tagged -> try to deep copy the object
           begin
@@ -84,8 +84,8 @@ class Eventbox
     public
 
     def mutable_object(object)
-      if Thread.current == @ctrl_thread
-        ObjectRegistry.set_tag(object, @ctrl_thread)
+      if event_loop.internal_thread?
+        ObjectRegistry.set_tag(object, event_loop)
       else
         ObjectRegistry.set_tag(object, :extern)
       end

@@ -61,7 +61,6 @@ class EventboxTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalObject, eb.values[1]
-    refute_equal Thread.current.object_id, eb.values[2]
     assert_equal eb.thread, eb.values[2]
   end
 
@@ -154,7 +153,6 @@ class EventboxTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalObject, eb.values[1]
-    refute_equal Thread.current.object_id, eb.values[2]
     assert_equal eb.thread, eb.values[2]
   end
 
@@ -275,14 +273,13 @@ class EventboxTest < Minitest::Test
   def test_external_object_sync_call
     fc = Class.new(Eventbox) do
       sync_call def out(pr)
-        [Thread.current.object_id, 1234, pr, pr.class]
+        [1234, pr, pr.class]
       end
     end.new
 
     pr = proc{ 543 }
     value = fc.out(pr)
 
-    refute_equal Thread.current.object_id, value.shift
     assert_equal [1234, pr, Eventbox::ExternalObject], value
   end
 
@@ -399,10 +396,8 @@ class EventboxTest < Minitest::Test
 
     assert_equal [pr, 4], values[0, 2]
     assert_equal Thread.current.object_id, values[-1][0]
-    refute_equal Thread.current.object_id, values[-1][1]
     refute_equal Thread.current.object_id, values[-1][2]
     refute_equal Thread.current.object_id, values[-1][3]
-    assert_equal values[-1][1], values[-1][3]
     assert_equal 543, values[0].call
   end
 
