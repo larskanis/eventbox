@@ -35,7 +35,7 @@ Or install it yourself as:
 
 ## Usage
 
-Let's build a threadsafe Queue class:
+Let's build a Queue class:
 
 ```ruby
 class Queue < Eventbox
@@ -62,9 +62,27 @@ class Queue < Eventbox
     end
   end
 end
+
+q = Queue.new
+Thread.new do
+  5.times do |i|
+    q.enq i      # Enqueue integers 0 to 5
+  end
+end
+
+5.times do
+  p q.deq        # Fetch and print 5 integers from the queue
+end
+
+# It gives the following output:
+0
+1
+2
+3
+4
 ```
 
-Although there are no mutex or condition variables in use, the implementation is threadsafe.
+Although there are no mutex or condition variables in use, the implementation is guaranteed threadsafe.
 
 
 ## Comparison with other libraries
