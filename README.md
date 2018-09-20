@@ -35,74 +35,36 @@ Or install it yourself as:
 
 ## Usage
 
-See the following example:
+Let's build a threadsafe Queue class:
 
 ```ruby
-class Box1 < Eventbox
-  # Define a method with deferred return value.
-  yield_call def go(id, result)
-    puts "go called: #{id} thread: #{Thread.current.object_id}"
+class Queue < Eventbox
+  # Called at Queue.new just like Object#initialize in ordinary ruby classes
+  async_call def init
+    @que = []      # List of values waiting for being fetched by deq
+    @waiting = []  # List of blocking deq calls waiting for new values to be pushed by enq
+  end
 
-    # Start a new thread to execute blocking functions.
-    # Parameters are passed safely as copied or wrapped objects.
-    action id, result, def wait(id, result)
-      puts "action #{id} started thread: #{Thread.current.object_id}"
-      sleep 1
-      done(id, result)
-      puts "action #{id} finished thread: #{Thread.current.object_id}"
+  # Push a value to the queue and return the next value by the next waiting deq call
+  async_call def enq(value)
+    @que << value         # Push a value to the queue
+    if w=@waiting.shift
+      w.yield @que.shift  # Let one waiting deq call return with the next value from the queue
     end
   end
 
-  # Define a method with no return value.
-  async_call def done(id, result)
-    puts "done called: #{id} thread: #{Thread.current.object_id}"
-    # Let fc.go return
-    result.yield
+  # Fetch a value from the queue or suspend the caller until a value has been enqueued
+  yield_call def deq(result)
+    if @que.empty?
+      @waiting << result       # Don't return a value now, but enqueue the request as waiting
+    else
+      result.yield @que.shift  # Immediately return the next value from the queue
+    end
   end
 end
-fc = Box1.new
-
-th = Thread.new do
-  # Run 3 threads which call fc.go concurrently.
-  3.times.map do |id|
-    Thread.new do
-      fc.go(id)
-      puts "go returned: #{id} thread: #{Thread.current.object_id}"
-    end
-  end.map(&:value)
-  # Let fc.run exit
-  fc.exit_run
-end
-
-# Run the event loop of Box1
-fc.run
 ```
 
-Running this takes one second and prints an output similar to this:
-
-```javascript
-go called: 1 thread: 56
-go called: 0 thread: 56
-go called: 2 thread: 56
-action 1 started thread: 54
-action 0 started thread: 36
-action 2 started thread: 16
-action 1 finished thread: 54
-done called: 1 thread: 56
-go returned: 1 thread: 86
-action 2 finished thread: 16
-done called: 2 thread: 56
-action 0 finished thread: 36
-done called: 0 thread: 56
-go returned: 2 thread: 72
-go returned: 0 thread: 04
-```
-
-The thread `object_id` above is shortened for better readability.
-Although `go` and `done` are called from different threads (86, 72, 04), they are enqueued into the event loop of Box1 and subsequently executed by the main thread (56).
-Since all calls are handled by one thread internally, access to instance variables is safe without locks.
-In contrast each call to `action` is executed by it's own thread (54, 36, 16).
-All parameters passed to the thread are copied or securely wrapped and the action has with no access to local or instance variables.
+Although there are no mutex or condition variables in use, the implementation is threadsafe.
 
 
 ## Comparison with other libraries
