@@ -47,13 +47,13 @@ class Eventbox
 
     def async_call(box, name, args, block)
       with_call_frame(name, nil) do
-        box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(box, name, block))
+        box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(sanity_after_queue(block)))
       end
     end
 
     def sync_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        res = box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(box, name, block))
+        res = box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(sanity_after_queue(block)))
         res = sanity_before_queue(res)
         answer_queue << res
       end
@@ -68,14 +68,29 @@ class Eventbox
           resu = return_args(resu)
           resu = sanity_before_queue(resu)
           answer_queue << resu
-        end, &_cb_handler(box, name, block))
+        end, &_cb_handler(sanity_after_queue(block)))
       end
     end
 
-    def callback_result(box, res, cbresult)
-      with_call_frame(nil, nil) do
-        cbres = sanity_after_queue(res)
-        cbresult.yield(cbres)
+    # Anonymous version of yield_call
+    def internal_proc_call(pr, args, answer_queue)
+      with_call_frame(InternalProc, answer_queue) do
+        result = nil
+        pr.yield(*sanity_after_queue(args), proc do |*resu|
+          raise MultipleResults, "received multiple results for method `#{name}'" if result
+          result = resu
+          resu = return_args(resu)
+          resu = sanity_before_queue(resu)
+          answer_queue << resu
+        end)
+      end
+    end
+
+    # Anonymous version of async_call
+    def external_proc_result(cbresult, res)
+      with_call_frame(ExternalProc, nil) do
+        res = sanity_after_queue(res)
+        cbresult.yield(*res)
       end
     end
 
@@ -85,16 +100,21 @@ class Eventbox
       end
     end
 
-    private def _cb_handler(box, name, block)
+    Callback = Struct.new :block, :args, :cbresult
+
+    def _external_proc_call(block, name, cbargs, cbresult)
+      if @latest_answer_queue
+        @latest_answer_queue << Callback.new(sanity_before_queue(block), sanity_before_queue(cbargs), cbresult)
+      elsif @latest_call_name
+        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
+      else
+        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by some event but should have been by a sync_call or yield_call")
+      end
+    end
+
+    private def _cb_handler(block)
       proc do |*cbargs, &cbresult|
-        cbargs = sanity_after_queue(cbargs)
-        if @latest_answer_queue
-          @latest_answer_queue << Callback.new(box, cbargs, cbresult, block)
-        elsif @latest_call_name
-          raise(InvalidAccess, "closure defined by `#{name}' was yielded by `#{@latest_call_name}', which must a sync_call or yield_call")
-        else
-          raise(InvalidAccess, "closure defined by `#{name}' was yielded by some event but should have been by a sync_call or yield_call")
-        end
+        block.yield(*cbargs, &cbresult)
       end
     end
 

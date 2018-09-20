@@ -60,7 +60,7 @@ class EventboxTest < Minitest::Test
     eb = TestInitWithDef.new("123", pr)
 
     assert_equal String, eb.values[0]
-    assert_equal Eventbox::ExternalObject, eb.values[1]
+    assert_equal Eventbox::ExternalProc, eb.values[1]
     assert_equal eb.thread, eb.values[2]
   end
 
@@ -152,7 +152,7 @@ class EventboxTest < Minitest::Test
     eb = TestInitWithBlock.new("123", pr)
 
     assert_equal String, eb.values[0]
-    assert_equal Eventbox::ExternalObject, eb.values[1]
+    assert_equal Eventbox::ExternalProc, eb.values[1]
     assert_equal eb.thread, eb.values[2]
   end
 
@@ -280,7 +280,7 @@ class EventboxTest < Minitest::Test
     pr = proc{ 543 }
     value = fc.out(pr)
 
-    assert_equal [1234, pr, Eventbox::ExternalObject], value
+    assert_equal [1234, pr, Eventbox::ExternalProc], value
   end
 
   def test_external_object_sync_call_tagged
@@ -336,8 +336,8 @@ class EventboxTest < Minitest::Test
     values = fc.go
     assert_equal "111", values[0]
     assert_equal "String", values[1]
-    assert_kind_of Eventbox::InternalObject, values[2]
-    assert_equal "Eventbox::InternalObject", values[3]
+    assert_kind_of Eventbox::InternalProc, values[2]
+    assert_equal "Eventbox::InternalProc", values[3]
   end
 
   def test_action_external_object_tagged
@@ -867,5 +867,49 @@ class EventboxTest < Minitest::Test
     assert_operator 1..999, :===, l1.size
     assert_operator 1..999, :===, l2.size
     assert_equal 1000.times.to_a, (l1 + l2).sort
+  end
+
+  class TestThreadPool < Eventbox
+    async_call def init(pool_size)
+      @que = []
+      @jobless = []
+
+      pool_size.times do
+        action def pool_thread
+          while bl=next_job
+            bl.yield
+          end
+        end
+      end
+    end
+
+    yield_call def next_job(result)
+      if @que.empty?
+        @jobless << result
+      else
+        result.yield @que.shift
+      end
+    end
+
+    async_call def pool(&block)
+      if @jobless.empty?
+        @que << block
+      else
+        @jobless.shift.yield block
+      end
+    end
+  end
+
+  def test_thread_pool
+    tp = TestThreadPool.new(3)
+
+    q = TestQueue.new
+    5.times do |i|
+      tp.pool do
+        q.enq "task #{i} #{Thread.current}"
+      end
+    end
+
+    p 5.times.map { q.deq }
   end
 end

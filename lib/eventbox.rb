@@ -104,7 +104,8 @@ class Eventbox
          cb.yield(*cbargs)
         end
       else
-        args = sanity_before_queue(args)
+        args = sanity_before_queue(args, name)
+        cb = sanity_before_queue(cb, name)
         @event_loop.async_call(self, name, args, cb)
       end
     end
@@ -126,7 +127,8 @@ class Eventbox
           cb.yield(*cbargs)
         end
       else
-        args = sanity_before_queue(args)
+        args = sanity_before_queue(args, name)
+        cb = sanity_before_queue(cb, name)
         answer_queue = Queue.new
         @event_loop.sync_call(self, name, args, answer_queue, cb)
         callback_loop(answer_queue)
@@ -143,37 +145,20 @@ class Eventbox
   # The yielded value is passed either as a copy or as a unwrapped object.
   # The yielded value is therefore handled similar to parameters to #action .
   def self.yield_call(name, &block)
-    unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
       if @event_loop.internal_thread?
         raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
       else
-        args = sanity_before_queue(args)
+        args = sanity_before_queue(args, name)
+        cb = sanity_before_queue(cb, name)
         answer_queue = Queue.new
         @event_loop.yield_call(self, name, args, answer_queue, cb)
         callback_loop(answer_queue)
       end
     end
-    unbound_method = self.instance_method("__#{name}__")
   end
 
-  Callback = Struct.new :box, :args, :cbresult, :block
-
-  def callback_loop(answer_queue)
-    loop do
-      rets = answer_queue.deq
-      case rets
-      when Callback
-        cbargs = sanity_after_queue(rets.args)
-        cbres = rets.block.yield(*cbargs)
-        cbres = sanity_before_queue(cbres)
-        @event_loop.callback_result(rets.box, cbres, rets.cbresult)
-      else
-        answer_queue.close
-        return sanity_after_queue(rets)
-      end
-    end
-  end
+  private :callback_loop
 
   def self.attr_writer(name)
     async_call("#{name}=") do |value|
