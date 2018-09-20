@@ -1,6 +1,5 @@
 require "eventbox/argument_sanitizer"
 require "eventbox/event_loop"
-require "eventbox/yielding_queue"
 require "eventbox/object_registry"
 
 class Eventbox
@@ -61,8 +60,6 @@ class Eventbox
     @event_loop = EventLoop.new(threadpool)
     ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
 
-    @input_queue = @event_loop.input_queue
-
     init(*args, &block)
   end
 
@@ -88,11 +85,6 @@ class Eventbox
     end
   end
 
-  Callback = Struct.new :box, :args, :cbresult, :block
-  CallbackResult = Struct.new :box, :res, :cbresult
-
-  AsyncCall = Struct.new :box, :name, :args, :block
-
   # Define a method for asynchronous (fire-and-forget) calls.
   #
   # The created method can be called from any thread.
@@ -113,13 +105,11 @@ class Eventbox
         end
       else
         args = sanity_before_queue(args)
-        @input_queue << AsyncCall.new(self, name, args, cb)
+        @event_loop.async_call(self, name, args, cb)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
   end
-
-  SyncCall = Struct.new :box, :name, :args, :answer_queue, :block
 
   # Define a method for synchronous calls.
   #
@@ -138,14 +128,12 @@ class Eventbox
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
-        @input_queue << SyncCall.new(self, name, args, answer_queue, cb)
+        @event_loop.sync_call(self, name, args, answer_queue, cb)
         callback_loop(answer_queue)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
   end
-
-  YieldCall = Struct.new :box, :name, :args, :answer_queue, :block
 
   # Define a method for synchronous calls with asynchronous result.
   #
@@ -162,12 +150,14 @@ class Eventbox
       else
         args = sanity_before_queue(args)
         answer_queue = Queue.new
-        @input_queue << YieldCall.new(self, name, args, answer_queue, cb)
+        @event_loop.yield_call(self, name, args, answer_queue, cb)
         callback_loop(answer_queue)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
   end
+
+  Callback = Struct.new :box, :args, :cbresult, :block
 
   def callback_loop(answer_queue)
     loop do
@@ -177,7 +167,7 @@ class Eventbox
         cbargs = sanity_after_queue(rets.args)
         cbres = rets.block.yield(*cbargs)
         cbres = sanity_before_queue(cbres)
-        @input_queue << CallbackResult.new(rets.box, cbres, rets.cbresult)
+        @event_loop.callback_result(rets.box, cbres, rets.cbresult)
       else
         answer_queue.close
         return sanity_after_queue(rets)
@@ -253,7 +243,7 @@ class Eventbox
 
     args = sanity_before_queue(args)
     # Start a new action thread
-    @event_loop.start_action(meth, args)
+    @event_loop._start_action(meth, args)
     nil
   end
 end
