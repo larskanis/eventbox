@@ -47,13 +47,13 @@ class Eventbox
 
     def async_call(box, name, args, block)
       with_call_frame(name, nil) do
-        box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(sanity_after_queue(block)))
+        box.send("__#{name}__", *sanity_after_queue(args), &sanity_after_queue(block))
       end
     end
 
     def sync_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        res = box.send("__#{name}__", *sanity_after_queue(args), &_cb_handler(sanity_after_queue(block)))
+        res = box.send("__#{name}__", *sanity_after_queue(args), &sanity_after_queue(block))
         res = sanity_before_queue(res)
         answer_queue << res
       end
@@ -68,7 +68,7 @@ class Eventbox
           resu = return_args(resu)
           resu = sanity_before_queue(resu)
           answer_queue << resu
-        end, &_cb_handler(sanity_after_queue(block)))
+        end, &sanity_after_queue(block))
       end
     end
 
@@ -109,12 +109,6 @@ class Eventbox
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by some event but should have been by a sync_call or yield_call")
-      end
-    end
-
-    private def _cb_handler(block)
-      proc do |*cbargs, &cbresult|
-        block.yield(*cbargs, &cbresult)
       end
     end
 

@@ -906,6 +906,7 @@ class EventboxTest < Minitest::Test
     q = TestQueue.new
     5.times do |i|
       tp.pool do
+        sleep 0.001
         q.enq "task #{i} #{Thread.current}"
       end
     end

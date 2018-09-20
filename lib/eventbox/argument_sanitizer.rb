@@ -9,13 +9,34 @@ class Eventbox
     def sanity_before_queue2(arg, name)
       case arg
       # If object is already wrapped -> pass through
-      when WrappedObject
+      when WrappedObject, WrappedProc
         arg
       when Proc
         if event_loop.internal_thread?
-          InternalProc.new(arg, event_loop, name)
+          InternalProc.new(arg, event_loop, name) do |*args, &block|
+            if event_loop.internal_thread?
+              # called internally
+              arg.yield(*args)
+            else
+              # called externally
+              answer_queue = Queue.new
+              args = sanity_before_queue(args)
+              event_loop.internal_proc_call(arg, args, answer_queue)
+              event_loop.callback_loop(answer_queue)
+            end
+          end
+
         else
-          ExternalProc.new(arg, event_loop, name)
+          ExternalProc.new(arg, event_loop, name) do |*args, &block|
+            if !event_loop.internal_thread?
+              # called externally
+              arg.yield(*args)
+            else
+              # called internally
+              event_loop._external_proc_call(arg, name, args, block)
+            end
+          end
+
         end
       else
         # Check if the object has been tagged
@@ -46,6 +67,8 @@ class Eventbox
       case arg
       when WrappedObject
         arg.access_allowed? ? arg.object : arg
+      when WrappedProc
+        arg.direct_callable? ? arg.object : arg
       else
         arg
       end
@@ -84,6 +107,7 @@ class Eventbox
   end
 
   class WrappedObject
+    attr_reader :name
     def initialize(object, event_loop, name=nil)
       @object = object
       @event_loop = event_loop
@@ -113,40 +137,34 @@ class Eventbox
     end
   end
 
-  module WrappedProc
-    include ArgumentSanitizer
-    attr_reader :event_loop
-    private :event_loop
-  end
-
-  class InternalProc < InternalObject
-    include WrappedProc
-
-    def yield(*args)
-      if access_allowed?
-        # called internally
-        @object.yield(*args)
-      else
-        # called externally
-        answer_queue = Queue.new
-        args = sanity_before_queue(args)
-        event_loop.internal_proc_call(@object, args, answer_queue)
-        event_loop.callback_loop(answer_queue)
-      end
+  class WrappedProc < Proc
+    attr_reader :name
+    def initialize(object, event_loop, name=nil)
+      @object = object
+      @event_loop = event_loop
+      @name = name
     end
   end
 
-  class ExternalProc < ExternalObject
-    include WrappedProc
+  class InternalProc < WrappedProc
+    def direct_callable?
+      @event_loop.internal_thread?
+    end
 
-    def yield(*args, &block)
-      if access_allowed?
-        # called externally
-        @object.yield(*args)
-      else
-        # called internally
-        event_loop._external_proc_call(@object, @name, args, block)
-      end
+    def object
+      raise InvalidAccess, "access to internal proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless direct_callable?
+      @object
+    end
+  end
+
+  class ExternalProc < WrappedProc
+    def direct_callable?
+      !@event_loop.internal_thread?
+    end
+
+    def object
+      raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?
+      @object
     end
   end
 end
