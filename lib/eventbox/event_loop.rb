@@ -38,10 +38,13 @@ class Eventbox
         @latest_answer_queue = answer_queue
         @latest_call_name = name
         @ctrl_thread = Thread.current
-        yield
-        @latest_answer_queue = nil
-        @latest_call_name = nil
-        @ctrl_thread = nil
+        begin
+          yield
+        ensure
+          @latest_answer_queue = nil
+          @latest_call_name = nil
+          @ctrl_thread = nil
+        end
       end
     end
 
@@ -104,7 +107,7 @@ class Eventbox
 
     def _external_proc_call(block, name, cbargs, cbresult)
       if @latest_answer_queue
-        @latest_answer_queue << Callback.new(sanity_before_queue(block), sanity_before_queue(cbargs), cbresult)
+        @latest_answer_queue << Callback.new(block, sanity_before_queue(cbargs), cbresult)
       elsif @latest_call_name
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else

@@ -16,7 +16,7 @@ class Eventbox
           InternalProc.new(arg, event_loop, name) do |*args, &block|
             if event_loop.internal_thread?
               # called internally
-              arg.yield(*args)
+              raise InvalidAccess, "internal proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped internally"
             else
               # called externally
               answer_queue = Queue.new
@@ -30,7 +30,7 @@ class Eventbox
           ExternalProc.new(arg, event_loop, name) do |*args, &block|
             if !event_loop.internal_thread?
               # called externally
-              arg.yield(*args)
+              raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped externally"
             else
               # called internally
               event_loop._external_proc_call(arg, name, args, block)
@@ -96,8 +96,11 @@ class Eventbox
         when EventLoop::Callback
           args = sanity_after_queue(rets.args)
           cbres = sanity_after_queue(rets.block).yield(*args)
-          cbres = sanity_before_queue(cbres)
-          event_loop.external_proc_result(rets.cbresult, cbres)
+
+          if rets.cbresult
+            cbres = sanity_before_queue(cbres)
+            event_loop.external_proc_result(rets.cbresult, cbres)
+          end
         else
           answer_queue.close
           return sanity_after_queue(rets)

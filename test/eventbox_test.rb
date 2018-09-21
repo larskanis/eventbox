@@ -40,8 +40,8 @@ class EventboxTest < Minitest::Test
   end
 
   class TestInitWithDef < Eventbox
-    async_call def init(num, pr)
-      @values = [num.class, pr.class, Thread.current.object_id]
+    async_call def init(num, pr, pi)
+      @values = [num.class, pr.class, pi.class, Thread.current.object_id]
     end
     attr_reader :values
     sync_call def thread
@@ -51,57 +51,58 @@ class EventboxTest < Minitest::Test
 
   def test_100_init_with_def
     100.times do
-      TestInitWithDef.new("123", 234)
+      TestInitWithDef.new("123", proc{234}, IO.pipe)
     end
   end
 
   def test_init_with_def
     pr = proc {}
-    eb = TestInitWithDef.new("123", pr)
+    eb = TestInitWithDef.new("123", pr, IO.pipe)
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal eb.thread, eb.values[2]
+    assert_equal Eventbox::ExternalObject, eb.values[2]
+    assert_equal eb.thread, eb.values[3]
   end
 
   def test_init_with_async_def_and_super
     pr = proc {}
     eb = Class.new(TestInitWithDef) do
-      async_call def init(num, pr)
+      async_call def init(num, pr, pi)
         super
         @values << Thread.current.object_id
       end
-    end.new(123, pr)
+    end.new(123, pr, IO.pipe)
 
-    assert_equal eb.thread, eb.values[2], "superclass was called"
-    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+    assert_equal eb.thread, eb.values[3], "superclass was called"
+    assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
   def test_init_with_sync_def_and_super
     pr = proc {}
     eb = Class.new(TestInitWithDef) do
-      sync_call def init(num, pr)
+      sync_call def init(num, pr, pi)
         super
         @values << Thread.current.object_id
       end
-    end.new(123, pr)
+    end.new(123, pr, IO.pipe)
 
-    assert_equal eb.thread, eb.values[2], "superclass was called"
-    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+    assert_equal eb.thread, eb.values[3], "superclass was called"
+    assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
   def test_init_with_yield_def_and_super
     eb = Class.new(TestInitWithDef) do
-      yield_call def init(num, result)
+      yield_call def init(num, pi, result)
         super
         @values << Thread.current.object_id
         result.yield
       end
-    end.new(123)
+    end.new(123, IO.pipe)
 
-    assert_equal Proc, eb.values[1], "result is passed to superclass"
-    assert_equal eb.thread, eb.values[2], "superclass was called"
-    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+    assert_equal Eventbox::ExternalObject, eb.values[1], "result is passed to superclass"
+    assert_equal eb.thread, eb.values[3], "superclass was called"
+    assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
   def test_intern_yield_call_fails
@@ -138,8 +139,8 @@ class EventboxTest < Minitest::Test
   end
 
   class TestInitWithBlock < Eventbox
-    async_call :init do |num, pr|
-      @values = [num.class, pr.class, Thread.current.object_id]
+    async_call :init do |num, pr, pi|
+      @values = [num.class, pr.class, pi.class, Thread.current.object_id]
     end
     attr_reader :values
     sync_call :thread do
@@ -149,24 +150,25 @@ class EventboxTest < Minitest::Test
 
   def test_init_with_block
     pr = proc {}
-    eb = TestInitWithBlock.new("123", pr)
+    eb = TestInitWithBlock.new("123", pr, IO.pipe)
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal eb.thread, eb.values[2]
+    assert_equal Eventbox::ExternalObject, eb.values[2]
+    assert_equal eb.thread, eb.values[3]
   end
 
   def test_init_with_async_block_and_super
     pr = proc {}
     eb = Class.new(TestInitWithBlock) do
-      async_call :init do |num, pr2|
-        super(num, pr2) # block form requres explicit parameters
+      async_call :init do |num, pr2, pi2|
+        super(num, pr2, pi2) # block form requres explicit parameters
         @values << Thread.current.object_id
       end
-    end.new(123, pr)
+    end.new(123, pr, IO.pipe)
 
-    assert_equal eb.thread, eb.values[2], "superclass was called"
-    assert_equal eb.thread, eb.values[3], "Methods in derived and superclass are called from the same thread"
+    assert_equal eb.thread, eb.values[3], "superclass was called"
+    assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
   class FcSleep < Eventbox
@@ -306,7 +308,7 @@ class EventboxTest < Minitest::Test
     end.new
 
     assert_equal 1234, fc.out[0]
-    assert_kind_of Eventbox::InternalObject, fc.out[1]
+    assert_kind_of Eventbox::InternalProc, fc.out[1]
   end
 
   def test_internal_object_sync_call_tagged
@@ -401,6 +403,19 @@ class EventboxTest < Minitest::Test
     assert_equal 543, values[0].call
   end
 
+  def test_external_proc_called_internally
+    fc = Class.new(Eventbox) do
+      sync_call def init(pr)
+        pr.call(5)
+      end
+    end
+
+    a = nil
+    pr = proc { |n| a = n; }
+    fc.new(pr)
+    assert_equal 5, a
+  end
+
   def test_external_object_invalid_access
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
@@ -409,16 +424,29 @@ class EventboxTest < Minitest::Test
     end
 
     with_report_on_exception(false) do
-      pr = proc{}
+      pr = IO.pipe
       ex = assert_raises(NoMethodError){ fc.new(pr) }
       assert_match(/`call'/, ex.to_s)
     end
   end
 
+  def test_internal_proc_called_externally
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        proc do |n, result|
+          result.yield(n + 1)
+        end
+      end
+    end.new
+
+    pr = fc.pr
+    assert_equal 124, pr.call(123)
+  end
+
   def test_internal_object_invalid_access
     fc = Class.new(Eventbox) do
       sync_call def pr
-        proc{}
+        IO.pipe
       end
     end.new
 
@@ -476,7 +504,7 @@ class EventboxTest < Minitest::Test
       attr_reader :error
     end.new
 
-    ex = assert_match(/Eventbox::InvalidAccess/, eb.error)
+    assert_match(/Eventbox::InvalidAccess/, eb.error)
     assert_match(/action must be called from/, eb.error)
   end
 
@@ -666,9 +694,9 @@ class EventboxTest < Minitest::Test
       @notify_when_finished = []
     end
 
-    yield_call :process do |name, result, &block|
+    async_call :process do |name, &block|
       @tasks << [block, name]
-      result.yield
+      check_work
     end
 
     sync_call :task_finished do |workerid, result|
@@ -679,25 +707,28 @@ class EventboxTest < Minitest::Test
     end
 
     yield_call :finish_tasks do |result|
-      @notify_when_finished << result
+      if @tasks.empty? && @working.empty?
+        result.yield
+      else
+        @notify_when_finished << result
+      end
     end
   end
 
   def test_concurrent_workers_with_callback
-    skip "callback from a different method is not yet supported"
     cw = ConcurrentWorkersWithCallback.new
     cw.add_worker(0)
 
-    values = []
+    values = Queue.new
     10.times do |taskid|
       cw.add_worker(taskid) if taskid > 5
       cw.process("task #{taskid}") do |result|
-        values << result
+        values << [taskid, result]
       end
     end
     cw.finish_tasks # should yield block to process
 
-    assert_equal 10.times.map{|i| "task #{i} finished" }, values
+    assert_equal 10.times.map{|i| [i, "task #{i} finished"] }, 10.times.map{ values.deq }.sort
   end
 
   def test_external_async_call_with_deferred_callback
@@ -904,13 +935,15 @@ class EventboxTest < Minitest::Test
     tp = TestThreadPool.new(3)
 
     q = TestQueue.new
-    5.times do |i|
+    50.times do |i|
       tp.pool do
         sleep 0.001
-        q.enq "task #{i} #{Thread.current}"
+        q.enq [i, Thread.current.object_id]
       end
     end
 
-    p 5.times.map { q.deq }
+    results = 50.times.map { q.deq }
+    assert_equal 50.times.to_a, results.map(&:first).sort
+    assert_equal 3, results.map(&:last).uniq.size
   end
 end
