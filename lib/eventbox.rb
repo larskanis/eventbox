@@ -1,3 +1,4 @@
+require "weakref"
 require "eventbox/argument_sanitizer"
 require "eventbox/event_loop"
 require "eventbox/object_registry"
@@ -9,6 +10,7 @@ class Eventbox
 
   class InvalidAccess < RuntimeError; end
   class MultipleResults < RuntimeError; end
+  class AbortAction < RuntimeError; end
 
   private
 
@@ -42,23 +44,11 @@ class Eventbox
 
     # Define an annonymous class which is used as execution context for actions.
     meths = public_methods - Object.new.methods - [:shutdown]
-    selfobj = self
-
-    # When called from action method, this class is used as execution environment for the newly created thread.
-    # All calls to public methods are passed to the calling instance.
-    @action_class = Class.new(self.class) do
-      # Forward method calls.
-      meths.each do |fwmeth|
-        define_method(fwmeth) do |*fwargs, &fwblock|
-          selfobj.send(fwmeth, *fwargs, &fwblock)
-        end
-      end
-    end
 
     # Run the event loop thread in a separate class.
     # Otherwise it would block GC'ing of self.
-    @event_loop = EventLoop.new(threadpool)
-    ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
+    @event_loop = EventLoop.new(threadpool, meths, self.class, WeakRef.new(self))
+    ObjectSpace.define_finalizer(self, @event_loop.method(:_shutdown))
 
     init(*args, &block)
   end
@@ -207,15 +197,15 @@ class Eventbox
   #     end
   #   end
   #
-  def action(*args, method_name)
+  def action(*args)
     raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
 
-    sandbox = @action_class.allocate
+    sandbox = @event_loop.action_class.allocate
     if block_given?
-      args << method_name
       method_name = yield(sandbox)
       meth = sandbox.method(method_name)
     else
+      method_name = args.pop
       # Verify that the method name didn't overwrite an existing method
       if @method_map[method_name]
         meth = method(method_name)

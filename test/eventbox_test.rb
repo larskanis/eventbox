@@ -42,6 +42,9 @@ class EventboxTest < Minitest::Test
   class TestInitWithDef < Eventbox
     async_call def init(num, pr, pi)
       @values = [num.class, pr.class, pi.class, Thread.current.object_id]
+      action def testthread
+        sleep # until GC destroys the Eventbox instance
+      end
     end
     attr_reader :values
     sync_call def thread
@@ -50,7 +53,7 @@ class EventboxTest < Minitest::Test
   end
 
   def test_100_init_with_def
-    100.times do
+    1000.times do
       TestInitWithDef.new("123", proc{234}, IO.pipe)
     end
   end

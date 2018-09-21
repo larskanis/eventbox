@@ -2,31 +2,53 @@ class Eventbox
   class EventLoop
     include ArgumentSanitizer
 
-    def initialize(threadpool)
+    attr_reader :action_class
+
+    def initialize(threadpool, meths, klass, weakbox)
       @threadpool = threadpool
       @action_threads = {}
       @ctrl_thread = nil
       @mutex = Mutex.new
+      @shutdown = false
+
+      # When called from action method, this class is used as execution environment for the newly created thread.
+      # All calls to public methods are passed to the calling instance.
+      @action_class = Class.new(klass) do
+        # Forward method calls.
+        meths.each do |fwmeth|
+          define_method(fwmeth) do |*fwargs, &fwblock|
+            weakbox.send(fwmeth, *fwargs, &fwblock)
+          end
+        end
+      end
     end
 
     def event_loop
       self
     end
 
-    def shutdown(object_id=nil)
+    def shutdown
+      @mutex.synchronize do
+        _shutdown
+      end
+      nil
+    end
+
+    def _abort_thread(thread, reason)
+      thread.raise AbortAction, "abort action thread by #{reason}"
+    end
+
+    def _shutdown(object_id=nil)
 #       warn "shutdown called for object #{object_id}"
 
-      @mutex.synchronize do
-        # terminate all running action threads
-        @action_threads.each do |th, _|
-          th.exit
-        end
+      # The finalizer doesn't allow suspension per Mutex, so that we access @action_threads unprotected.
+      # To avoid race conditions with thread creation, set a flag before the loop.
+      @shutdown = true
 
-        # TODO Closing the queue leads to ClosedQueueError on JRuby due to enqueuing of ThreadFinished objects.
-        # @input_queue.close
+      # terminate all running action threads
+      @action_threads.each do |th, _|
+        _abort_thread(th, "garbage collector".freeze)
       end
-
-      nil
     end
 
     def internal_thread?
@@ -116,14 +138,23 @@ class Eventbox
     end
 
     def _start_action(meth, args)
-      new_thread = @threadpool.new do
-        args = sanity_after_queue(args)
+      new_thread = Thread.handle_interrupt(AbortAction => :never) do
+        @threadpool.new do
+          begin
+            Thread.handle_interrupt(AbortAction => :on_blocking) do
+              args = sanity_after_queue(args)
 
-        meth.call(*args)
-        thread_finished(Thread.current)
+              meth.call(*args)
+            end
+          rescue AbortAction => err
+          ensure
+            thread_finished(Thread.current)
+          end
+        end
       end
-
       @action_threads[new_thread] = true
+
+      _abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
     end
   end
 end
