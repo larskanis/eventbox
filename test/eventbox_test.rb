@@ -19,9 +19,12 @@ class EventboxTest < Minitest::Test
     lingering = Thread.list - @start_threads
     if lingering.any?
       warn "Warning: #{lingering.length} lingering threads"
-#       lingering.each do |th|
-#         warn "    #{th.backtrace&.find{|t| !(t=~/\/eventbox\.rb:/) || th.backtrace&.first } }"
-#       end
+      lingering.each do |th|
+        line = th.backtrace&.find{|t| t=~/test\// } or
+            th.backtrace&.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) } or
+            th.backtrace&.first
+        warn "    #{ line }"
+      end
     end
   end
 

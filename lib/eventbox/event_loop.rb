@@ -39,7 +39,7 @@ class Eventbox
     end
 
     def _shutdown(object_id=nil)
-#       warn "shutdown called for object #{object_id}"
+#       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:first).map(&:object_id).join(",")}"
 
       # The finalizer doesn't allow suspension per Mutex, so that we access @action_threads unprotected.
       # To avoid race conditions with thread creation, set a flag before the loop.
