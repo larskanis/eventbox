@@ -42,12 +42,9 @@ class Eventbox
     prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
     @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
 
-    # Define an annonymous class which is used as execution context for actions.
-    meths = public_methods - Object.new.methods - [:shutdown]
-
     # Run the event loop thread in a separate class.
     # Otherwise it would block GC'ing of self.
-    @event_loop = EventLoop.new(threadpool, meths, self.class, WeakRef.new(self))
+    @event_loop = EventLoop.new(threadpool)
     ObjectSpace.define_finalizer(self, @event_loop.method(:_shutdown))
 
     init(*args, &block)
@@ -57,10 +54,30 @@ class Eventbox
 
   attr_reader :event_loop
 
+  def box
+    self
+  end
+
   # This method is executed when the event loop is up and running.
   #
   # Derive this method for initialization.
   def init(*args)
+  end
+
+  # When called from action method, this class is used as execution environment for the newly created thread.
+  # All calls to public methods are passed to the calling instance.
+  def self.get_or_define_action_wrapper
+    if const_defined?(:ActionWrapper, false)
+      box = const_get(:ActionWrapper)
+    else
+      box = Class.new(self) do
+        def box
+          @box.__getobj__
+        end
+      end
+      const_set(:ActionWrapper, box)
+    end
+    box
   end
 
   def self.with_block_or_def(name, block, &cexec)
@@ -73,6 +90,9 @@ class Eventbox
       remove_method(name)
       define_method(name, &cexec)
     end
+
+    bo = get_or_define_action_wrapper
+    bo.define_method(name, &cexec)
   end
 
   # Define a method for asynchronous (fire-and-forget) calls.
@@ -90,13 +110,13 @@ class Eventbox
       if @event_loop.internal_thread?
         # Use the correct method within the class hierarchy, instead of just self.send(*args).
         # Otherwise super() would start an infinite recursion.
-        unbound_method.bind(self).call(*args) do |*cbargs|
-         cb.yield(*cbargs)
+        unbound_method.bind(box).call(*args) do |*cbargs|
+          cb.yield(*cbargs)
         end
       else
         args = sanity_before_queue(args, name)
         cb = sanity_before_queue(cb, name)
-        @event_loop.async_call(self, name, args, cb)
+        @event_loop.async_call(box, name, args, cb)
       end
     end
     unbound_method = self.instance_method("__#{name}__")
@@ -113,14 +133,14 @@ class Eventbox
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
       if @event_loop.internal_thread?
-        unbound_method.bind(self).call(*args) do |*cbargs|
+        unbound_method.bind(box).call(*args) do |*cbargs|
           cb.yield(*cbargs)
         end
       else
         args = sanity_before_queue(args, name)
         cb = sanity_before_queue(cb, name)
         answer_queue = Queue.new
-        @event_loop.sync_call(self, name, args, answer_queue, cb)
+        @event_loop.sync_call(box, name, args, answer_queue, cb)
         callback_loop(answer_queue)
       end
     end
@@ -142,7 +162,7 @@ class Eventbox
         args = sanity_before_queue(args, name)
         cb = sanity_before_queue(cb, name)
         answer_queue = Queue.new
-        @event_loop.yield_call(self, name, args, answer_queue, cb)
+        @event_loop.yield_call(box, name, args, answer_queue, cb)
         callback_loop(answer_queue)
       end
     end
@@ -163,6 +183,18 @@ class Eventbox
   def self.attr_accessor(name)
     attr_reader name
     attr_writer name
+  end
+
+  def async_proc(name=nil, &block)
+    @event_loop.new_async_proc(name=nil, &block)
+  end
+
+  def sync_proc(name=nil, &block)
+    @event_loop.new_sync_proc(name=nil, &block)
+  end
+
+  def yield_proc(name=nil, &block)
+    @event_loop.new_yield_proc(name=nil, &block)
   end
 
   # Force stop of the event loop and of all action threads
@@ -200,7 +232,9 @@ class Eventbox
   def action(*args)
     raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
 
-    sandbox = @event_loop.action_class.allocate
+    sandbox = self.class.get_or_define_action_wrapper.allocate
+    sandbox.instance_variable_set(:@event_loop, @event_loop)
+    sandbox.instance_variable_set(:@box, WeakRef.new(self))
     if block_given?
       method_name = yield(sandbox)
       meth = sandbox.method(method_name)

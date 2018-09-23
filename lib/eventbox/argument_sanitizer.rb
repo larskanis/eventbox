@@ -12,32 +12,7 @@ class Eventbox
       when WrappedObject, WrappedProc
         arg
       when Proc
-        if event_loop.internal_thread?
-          InternalProc.new(arg, event_loop, name) do |*args, &block|
-            if event_loop.internal_thread?
-              # called internally
-              raise InvalidAccess, "internal proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped internally"
-            else
-              # called externally
-              answer_queue = Queue.new
-              args = sanity_before_queue(args)
-              event_loop.internal_proc_call(arg, args, answer_queue)
-              event_loop.callback_loop(answer_queue)
-            end
-          end
-
-        else
-          ExternalProc.new(arg, event_loop, name) do |*args, &block|
-            if !event_loop.internal_thread?
-              # called externally
-              raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped externally"
-            else
-              # called internally
-              event_loop._external_proc_call(arg, name, args, block)
-            end
-          end
-
-        end
+        event_loop.wrap_proc(arg, name)
       else
         # Check if the object has been tagged
         case ObjectRegistry.get_tag(arg)
@@ -67,7 +42,7 @@ class Eventbox
       case arg
       when WrappedObject
         arg.access_allowed? ? arg.object : arg
-      when WrappedProc
+      when ExternalProc
         arg.direct_callable? ? arg.object : arg
       else
         arg
@@ -158,6 +133,15 @@ class Eventbox
       raise InvalidAccess, "access to internal proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless direct_callable?
       @object
     end
+  end
+
+  class AsyncProc < InternalProc
+  end
+
+  class SyncProc < InternalProc
+  end
+
+  class YieldProc < InternalProc
   end
 
   class ExternalProc < WrappedProc

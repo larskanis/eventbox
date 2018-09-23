@@ -42,22 +42,35 @@ class EventboxTest < Minitest::Test
     end
   end
 
+  class TestInitWithPendingAction < Eventbox
+    yield_call def init(num, pr, pi, result)
+      @values = [num.class, pr.class, pi.class, Thread.current.object_id]
+      action result, def suspended_thread(result)
+        wait_forever(result)
+      end
+    end
+
+    yield_call def wait_forever(init_result, result)
+      init_result.yield
+      # Call never returns to the action, when not yielding result
+      # until GC destroys the Eventbox instance
+      #    result.yield
+    end
+  end
+
+  def test_100_init_with_pending_action
+    10.times do
+      TestInitWithPendingAction.new("123", proc{234}, IO.pipe)
+    end
+  end
+
   class TestInitWithDef < Eventbox
     async_call def init(num, pr, pi)
       @values = [num.class, pr.class, pi.class, Thread.current.object_id]
-      action def testthread
-        sleep # until GC destroys the Eventbox instance
-      end
     end
     attr_reader :values
     sync_call def thread
       Thread.current.object_id
-    end
-  end
-
-  def test_100_init_with_def
-    1000.times do
-      TestInitWithDef.new("123", proc{234}, IO.pipe)
     end
   end
 
@@ -308,13 +321,15 @@ class EventboxTest < Minitest::Test
   def test_internal_object_sync_call
     fc = Class.new(Eventbox) do
       sync_call def out
-        pr = proc{ 543 }
-        [1234, pr]
+        [1234, proc{ 543 }, async_proc{ 543 }, sync_proc{ 543 }, yield_proc{ 543 }]
       end
     end.new
 
     assert_equal 1234, fc.out[0]
-    assert_kind_of Eventbox::InternalProc, fc.out[1]
+    assert_kind_of Eventbox::InternalObject, fc.out[1]
+    assert_kind_of Eventbox::AsyncProc, fc.out[2]
+    assert_kind_of Eventbox::SyncProc, fc.out[3]
+    assert_kind_of Eventbox::YieldProc, fc.out[4]
   end
 
   def test_internal_object_sync_call_tagged
@@ -344,8 +359,8 @@ class EventboxTest < Minitest::Test
     values = fc.go
     assert_equal "111", values[0]
     assert_equal "String", values[1]
-    assert_kind_of Eventbox::InternalProc, values[2]
-    assert_equal "Eventbox::InternalProc", values[3]
+    assert_kind_of Eventbox::InternalObject, values[2]
+    assert_equal "Eventbox::InternalObject", values[3]
   end
 
   def test_action_external_object_tagged
@@ -409,7 +424,7 @@ class EventboxTest < Minitest::Test
     assert_equal 543, values[0].call
   end
 
-  def test_external_proc_called_internally
+  def test_external_proc_called_internally_without_block
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
         pr.call(5)
@@ -420,6 +435,19 @@ class EventboxTest < Minitest::Test
     pr = proc { |n| a = n; }
     fc.new(pr)
     assert_equal 5, a
+  end
+
+  def test_external_proc_called_internally_with_block
+    fc = Class.new(Eventbox) do
+      yield_call def go(pr, result)
+        pr.call(5) do |res|
+          result.yield res
+        end
+      end
+    end.new
+
+    pr = proc { |n| n + 1 }
+    assert_equal 6, fc.go(pr)
   end
 
   def test_external_object_invalid_access
@@ -436,10 +464,38 @@ class EventboxTest < Minitest::Test
     end
   end
 
-  def test_internal_proc_called_externally
+  def test_async_proc_called_externally
     fc = Class.new(Eventbox) do
       sync_call def pr
-        proc do |n, result|
+        async_proc do |n|
+          @n = n + 1
+        end
+      end
+      attr_reader :n
+    end.new
+
+    pr = fc.pr
+    pr.call(123)
+    assert_equal 124, fc.n
+  end
+
+  def test_sync_proc_called_externally
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        sync_proc do |n|
+          n + 1
+        end
+      end
+    end.new
+
+    pr = fc.pr
+    assert_equal 124, pr.call(123)
+  end
+
+  def test_yield_proc_called_externally
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        yield_proc do |n, result|
           result.yield(n + 1)
         end
       end
@@ -447,6 +503,53 @@ class EventboxTest < Minitest::Test
 
     pr = fc.pr
     assert_equal 124, pr.call(123)
+  end
+
+  def test_internal_proc_invalid_access
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        proc{}
+      end
+    end.new
+
+    pr = fc.pr
+    ex = assert_raises(NoMethodError){ pr.call }
+    assert_match(/`call'/, ex.to_s)
+  end
+
+  def test_results_yielded_in_action
+    fc = Class.new(Eventbox) do
+      async_call def init
+        @res1 = nil
+        @waiting = nil
+      end
+
+      yield_call def a(result)
+        @res1 = result
+        @waiting.yield(result) if @waiting
+      end
+
+      yield_call def await_res1(res1_isthere)
+        if @res1
+          res1_isthere.yield(@res1)
+        else
+          @waiting = res1_isthere
+        end
+      end
+
+      yield_call def b(result)
+        action result, def act(res2)
+          res1 = await_res1
+          res1.yield(1)
+          res2.yield(2)
+        end
+      end
+    end.new
+
+    th1 = Thread.new { fc.a }
+    th2 = Thread.new { fc.b }
+    assert_equal 1, th1.value
+    assert_equal 2, th2.value
   end
 
   def test_internal_object_invalid_access

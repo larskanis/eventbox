@@ -2,25 +2,12 @@ class Eventbox
   class EventLoop
     include ArgumentSanitizer
 
-    attr_reader :action_class
-
-    def initialize(threadpool, meths, klass, weakbox)
+    def initialize(threadpool)
       @threadpool = threadpool
       @action_threads = {}
       @ctrl_thread = nil
       @mutex = Mutex.new
       @shutdown = false
-
-      # When called from action method, this class is used as execution environment for the newly created thread.
-      # All calls to public methods are passed to the calling instance.
-      @action_class = Class.new(klass) do
-        # Forward method calls.
-        meths.each do |fwmeth|
-          define_method(fwmeth) do |*fwargs, &fwblock|
-            weakbox.send(fwmeth, *fwargs, &fwblock)
-          end
-        end
-      end
     end
 
     def event_loop
@@ -86,28 +73,30 @@ class Eventbox
 
     def yield_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        result = nil
-        box.send("__#{name}__", *sanity_after_queue(args), proc do |*resu|
-          raise MultipleResults, "received multiple results for method `#{name}'" if result
-          result = resu
-          resu = return_args(resu)
-          resu = sanity_before_queue(resu)
-          answer_queue << resu
-        end, &sanity_after_queue(block))
+        box.send("__#{name}__", *sanity_after_queue(args), _result_proc(answer_queue, name), &sanity_after_queue(block))
+      end
+    end
+
+    # Anonymous version of async_call
+    def async_proc_call(pr, args)
+      with_call_frame(AsyncProc, nil) do
+        pr.yield(*sanity_after_queue(args))
+      end
+    end
+
+    # Anonymous version of sync_call
+    def sync_proc_call(pr, args, answer_queue)
+      with_call_frame(SyncProc, answer_queue) do
+        res = pr.yield(*sanity_after_queue(args))
+        res = sanity_before_queue(res)
+        answer_queue << res
       end
     end
 
     # Anonymous version of yield_call
-    def internal_proc_call(pr, args, answer_queue)
-      with_call_frame(InternalProc, answer_queue) do
-        result = nil
-        pr.yield(*sanity_after_queue(args), proc do |*resu|
-          raise MultipleResults, "received multiple results for method `#{name}'" if result
-          result = resu
-          resu = return_args(resu)
-          resu = sanity_before_queue(resu)
-          answer_queue << resu
-        end)
+    def yield_proc_call(pr, args, answer_queue)
+      with_call_frame(YieldProc, answer_queue) do
+        pr.yield(*sanity_after_queue(args), _result_proc(answer_queue, pr))
       end
     end
 
@@ -116,6 +105,85 @@ class Eventbox
       with_call_frame(ExternalProc, nil) do
         res = sanity_after_queue(res)
         cbresult.yield(*res)
+      end
+    end
+
+    def new_async_proc(name=nil, &block)
+      AsyncProc.new(block, self, name) do |*args, &cbblock|
+        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+        if internal_thread?
+          # called internally
+          block.yield(*args)
+        else
+          # called externally
+          args = sanity_before_queue(args)
+          async_proc_call(block, args)
+        end
+      end
+    end
+
+    def new_sync_proc(name=nil, &block)
+      SyncProc.new(block, self, name) do |*args, &cbblock|
+        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+        if internal_thread?
+          # called internally
+          block.yield(*args)
+        else
+          # called externally
+          answer_queue = Queue.new
+          args = sanity_before_queue(args)
+          sync_proc_call(block, args, answer_queue)
+          callback_loop(answer_queue)
+        end
+      end
+    end
+
+    def new_yield_proc(name=nil, &block)
+      YieldProc.new(block, self, name) do |*args, &cbblock|
+        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+        if internal_thread?
+          # called internally
+          raise InvalidAccess, "internal yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
+        else
+          # called externally
+          answer_queue = Queue.new
+          args = sanity_before_queue(args)
+          yield_proc_call(block, args, answer_queue)
+          callback_loop(answer_queue)
+        end
+      end
+    end
+
+    private def _result_proc(answer_queue, name)
+      result_yielded = false
+      new_async_proc(name) do |*resu|
+        if result_yielded
+          if Proc === name
+            raise MultipleResults, "received multiple results for #{pr.inspect}"
+          else
+            raise MultipleResults, "received multiple results for method `#{name}'"
+          end
+        end
+        resu = return_args(resu)
+        resu = sanity_before_queue(resu)
+        answer_queue << resu
+        result_yielded = true
+      end
+    end
+
+    def wrap_proc(arg, name)
+      if internal_thread?
+        InternalObject.new(arg, self, name)
+      else
+        ExternalProc.new(arg, self, name) do |*args, &block|
+          if !internal_thread?
+            # called externally
+            raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped externally"
+          else
+            # called internally
+            _external_proc_call(arg, name, args, block)
+          end
+        end
       end
     end
 
@@ -146,7 +214,7 @@ class Eventbox
 
               meth.call(*args)
             end
-          rescue AbortAction => err
+          rescue AbortAction
           ensure
             thread_finished(Thread.current)
           end
