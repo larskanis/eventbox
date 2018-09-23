@@ -92,6 +92,75 @@ In contrast `async_call` defines a method which handles one event only - the sta
 The external call returns immediately, but can't return a value.
 
 
+### Another example: ThreadPool
+
+The following class implements a thread pool with a fixed number of threads to be used by the `pool` method.
+
+```ruby
+class ThreadPool < Eventbox
+  async_call def init(pool_size)
+    @que = []                 # Initialize an empty job queue
+    @jobless = []             # Initialize the list of jobless action threads
+
+    pool_size.times do        # Start up x action threads
+      action def pool_thread  # The action call returns immediately, but spawns a new thread
+        while bl=next_job     # Each new thread waits for a job to be pooled
+          bl.yield            # Execute the external job enqueued by `pool`
+        end
+      end
+    end
+  end
+
+  yield_call def next_job(result)
+    if @que.empty?            # No job pooled?
+      @jobless << result      # Enqueue the action thread to the list of jobless workers
+    else                      # Already pooled jobs?
+      result.yield @que.shift # Take the oldest job and let next_job return with this job
+    end
+  end
+
+  async_call def pool(&block)
+    if @jobless.empty?        # No jobless thread available?
+      @que << block           # Append the external block as job into the queue
+    else                      # A thread is waiting?
+      @jobless.shift.yield block  # Take one thread and let next_job return the given job
+    end                           # so that it is processed by the pool_thread action above
+  end
+end
+```
+
+This ThreadPool can be used like so:
+
+```ruby
+tp = ThreadPool.new(3)  # Create a thread pool with 3 action threads
+5.times do |i|          # Start 5 jobs concurrently
+  tp.pool do            # pool never blocks, but enqueues jobs when no free thread is available
+    sleep 1             # The mission of each job: Wait for 1 second (3 jobs concurrently)
+    p [i, Thread.current.object_id]
+  end
+end
+
+# It gives something like the following output after 1 second:
+[2, 47030774465880]
+[1, 47030775602740]
+[0, 47030774464940]
+# and something like this after one more seconds:
+[3, 47030775602740]
+[4, 47030774465880]
+```
+
+There are various battle proof implementations of multithreaded primitives, which are probably faster and more feature rich than the above.
+See [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby) for a great collection of threading abstractions.
+
+### When to use Eventbox?
+
+Eventbox comes into action when things are getting more complicated or more customized.
+Say a ThreadPool like challenge, but for virtual machines with a noticeable startup time, several activation steps and different properties per VM.
+In such cases available abstractions don't fit well to the problem.
+And while not impossible to implement things per mutexes and condition variables, it's pretty hard to do that right.
+But if you don't do it right, you'll probably not notice that, until going to production.
+
+
 ## Comparison with other libraries
 
 Eventbox doesn't try to implement IO or other blocking operations on top of the global event loop of a reactor model.
@@ -99,8 +168,9 @@ Instead it encourages the use of blocking operations and threads.
 The only type of events handled by the object internal event loop are method calls.
 
 This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid).
-Eventbox is reasonably fast, but is not written to minimize resource consumption or maximize performance.
+Eventbox is reasonably fast, but is not written to minimize resource consumption or maximize performance or throughput.
 Instead it is written to minimize race conditions and implementation complexity in a multithreaded environment.
+It also does a lot of safety checks to support the developer.
 
 
 ## Contributing
