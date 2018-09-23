@@ -1055,4 +1055,17 @@ class EventboxTest < Minitest::Test
     assert_equal 50.times.to_a, results.map(&:first).sort
     assert_equal 3, results.map(&:last).uniq.size
   end
+
+  def test_shutdown
+    c1 = Thread.list.length
+    eb = TestInitWithPendingAction.new(nil, nil, nil)
+    c2 = Thread.list.length
+    assert_equal c1+1, c2, "There should be a new thread"
+
+    eb.shutdown!
+
+    sleep 0.01
+    c3 = Thread.list.length
+    assert_equal c1, c3, "The new thread should be removed"
+  end
 end

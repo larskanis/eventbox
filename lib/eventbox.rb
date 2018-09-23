@@ -28,7 +28,7 @@ class Eventbox
 
     # Verify that all public methods are properly wrapped
     obj = Object.new
-    meths = methods - obj.methods - [:shutdown, :mutable_object]
+    meths = methods - obj.methods - [:shutdown!, :mutable_object]
     prmeths = private_methods - obj.private_methods
     prohib = meths.find do |name|
       !prmeths.include?(:"__#{name}__")
@@ -197,10 +197,12 @@ class Eventbox
     @event_loop.new_yield_proc(name=nil, &block)
   end
 
-  # Force stop of the event loop and of all action threads
+  # Force stop of all action threads spawned by this Eventbox instance
   #
   # Cleanup of threads will be done through the garbage collector otherwise.
-  public def shutdown
+  # However in some cases automatic garbage collection doesn't remove all instances due to running action threads.
+  # Calling shutdown! when the work of the instance is done, ensures that it is GC'ed in all cases.
+  public def shutdown!
     @event_loop.shutdown
   end
 
