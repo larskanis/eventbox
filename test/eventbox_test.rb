@@ -59,7 +59,7 @@ class EventboxTest < Minitest::Test
   end
 
   def test_100_init_with_pending_action
-    10.times do
+    100.times do
       TestInitWithPendingAction.new("123", proc{234}, IO.pipe)
     end
   end

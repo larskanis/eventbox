@@ -43,17 +43,17 @@ class Eventbox
     end
 
     def with_call_frame(name, answer_queue)
-      @mutex.synchronize do
+      @mutex.lock
+      begin
         @latest_answer_queue = answer_queue
         @latest_call_name = name
         @ctrl_thread = Thread.current
-        begin
-          yield
-        ensure
-          @latest_answer_queue = nil
-          @latest_call_name = nil
-          @ctrl_thread = nil
-        end
+        yield
+      ensure
+        @latest_answer_queue = nil
+        @latest_call_name = nil
+        @ctrl_thread = nil
+        @mutex.unlock
       end
     end
 
