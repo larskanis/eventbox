@@ -16,11 +16,7 @@ class Eventbox
 
   # Create a new Eventbox instance.
   #
-  # The same thread which called Eventbox.new, must also call Eventbox#run.
-  # It is possible to call asynchronous methods to the instance before calling #run .
-  # They are processed as soon as #run is started.
-  # It is also possible to call synchronous methods from a different thread.
-  # These calls will block until #run is started.
+  # All arguments are passed to the init() method when defined.
   def initialize(*args, &block)
     threadpool = Thread
 
@@ -42,7 +38,7 @@ class Eventbox
     prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
     @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
 
-    # Run the event loop thread in a separate class.
+    # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
     @event_loop = EventLoop.new(threadpool)
     ObjectSpace.define_finalizer(self, @event_loop.method(:_shutdown))
@@ -97,13 +93,11 @@ class Eventbox
 
   # Define a method for asynchronous (fire-and-forget) calls.
   #
-  # The created method can be called from any thread.
-  # The call is enqueued into the input queue of the control loop.
-  # A call wakes the control loop started by #run , so that the method body is executed concurrently.
-  # All parameters given to the are passed to the block as either copies or wrapped objects.
+  # The created method can be called safely from any thread.
+  # All call arguments are passed as either copies or wrapped objects.
   # A marshalable object is passed as a deep copy through Marshal.dump and Marshal.load .
-  # An object which faild to marshal is wrapped by Eventbox::MutableWrapper.
-  # Access to the wrapped object from the control thread is denied, but the wrapper can be stored and passed to other actions.
+  # An object which faild to marshal is wrapped by Eventbox::ExternalObject.
+  # Access to the external object from the event loop is denied, but the wrapper object can be stored and returned by methods or passed to actions.
   def self.async_call(name, &block)
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
@@ -124,11 +118,11 @@ class Eventbox
 
   # Define a method for synchronous calls.
   #
-  # The created method can be called from any thread.
+  # The created method can be called safely from any thread.
   # It is simular to #async_call , but the method doesn't return immediately, but waits until the method body is executed and returns its return value.
   #
   # The return value is passed either as a copy or as a unwrapped object.
-  # The return value is therefore handled similar to parameters to #action .
+  # The return value is therefore handled similar to arguments to #action .
   def self.sync_call(name, &block)
     unbound_method = nil
     with_block_or_def(name, block) do |*args, &cb|
@@ -149,11 +143,11 @@ class Eventbox
 
   # Define a method for synchronous calls with asynchronous result.
   #
-  # The created method can be called from any thread.
+  # The created method can be called safely from any thread.
   # It is simular to #sync_call , but not the result of the block is returned, but is returned per yield.
   #
   # The yielded value is passed either as a copy or as a unwrapped object.
-  # The yielded value is therefore handled similar to parameters to #action .
+  # The yielded value is therefore handled similar to arguments to #action .
   def self.yield_call(name, &block)
     with_block_or_def(name, block) do |*args, &cb|
       if @event_loop.internal_thread?
@@ -210,14 +204,14 @@ class Eventbox
 
   # Run a block as asynchronous action.
   #
-  # The action is executed through the threadpool given to #new .
+  # The action is executed through the threadpool given to TODO .
   #
-  # Each parameter is passed to the block either as a copy or as a unwrapped object.
+  # Each argument is passed to the block either as a copy or as a unwrapped object.
   # A wrapper object (kind of Eventbox::MutableWrapper) is unwrapped before passed to the called block.
   # Any other object is passed as a deep copy through Marshal.dump and Marshal.load .
   #
-  # Actions can return state changes or objects to the control loop by calls to methods created by #async_call, #sync_call or #yield_call.
-  # To avoid shared objects, the action block doesn't have access to local variables, instance variables or instance methods other then methods defined per #async_call, #sync_call or #yield_call .
+  # Actions can return state changes or objects to the event loop by calls to methods created by #async_call, #sync_call or #yield_call or by calling async_proc, sync_proc or yield_proc objects.
+  # To avoid unsafe shared objects, the action block doesn't have access to local variables, instance variables or instance methods other then methods defined per #async_call, #sync_call or #yield_call .
   #
   # An action can be started as named action like:
   #   action param1, tso(param2), def do_something(param1, param2)

@@ -6,11 +6,11 @@
 _Manage multithreading with the safety of event based programming_
 
 Eventbox objects are event based from the inside but thread safe from the outside.
-All code inside an Eventbox object is executed sequentially by a single thread.
-So it shouldn't do any blocking operations.
-All blocking operations can be executed in action threads.
-Data races are avoided through filters applied to all inputs and outputs.
-That way Eventbox guarantees stable objects without a need for any locks.
+All code inside an Eventbox object is executed non-concurrently.
+It must not do any blocking operations.
+All blocking operations can be executed in action threads spawned by the `action` method.
+Data races between internal and external objects are avoided through filters applied to all inputs and outputs.
+That way Eventbox guarantees stable states without a need for any locks.
 
 ## Requirements
 
@@ -62,7 +62,10 @@ class Queue < Eventbox
     end
   end
 end
+```
+It can be used just like ruby's builtin Queue implementation:
 
+```ruby
 q = Queue.new
 Thread.new do
   5.times do |i|
@@ -82,7 +85,11 @@ end
 4
 ```
 
-Although there are no mutex or condition variables in use, the implementation is guaranteed threadsafe.
+Although there are no mutex or condition variables in use, the implementation is guaranteed to be threadsafe.
+The key feature is the `yield_call` method definition.
+It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
+In contrast `async_call` defines a method which handles one event only - the start of the call.
+The external call returns immediately, but can't return a value.
 
 
 ## Comparison with other libraries
