@@ -125,14 +125,6 @@ class Eventbox
   end
 
   class InternalProc < WrappedProc
-    def direct_callable?
-      @event_loop.internal_thread?
-    end
-
-    def object
-      raise InvalidAccess, "access to internal proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless direct_callable?
-      @object
-    end
   end
 
   class AsyncProc < InternalProc
