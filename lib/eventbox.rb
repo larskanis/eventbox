@@ -92,7 +92,7 @@ class Eventbox
     end
 
     bo = get_or_define_action_wrapper
-    bo.define_method(name, &cexec)
+    bo.send(:define_method, name, &cexec)
   end
 
   # Define a method for asynchronous (fire-and-forget) calls.
