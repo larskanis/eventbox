@@ -77,7 +77,7 @@ class Eventbox
             event_loop.external_proc_result(rets.cbresult, cbres)
           end
         else
-          answer_queue.close
+          answer_queue.close if answer_queue.respond_to?(:close)
           return sanity_after_queue(rets)
         end
       end
