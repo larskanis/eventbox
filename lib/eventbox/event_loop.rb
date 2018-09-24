@@ -143,7 +143,7 @@ class Eventbox
         raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
         if internal_thread?
           # called internally
-          raise InvalidAccess, "internal yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
+          raise InvalidAccess, "yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
         else
           # called externally
           answer_queue = Queue.new
