@@ -114,6 +114,7 @@ class Eventbox
       end
     end
     unbound_method = self.instance_method("__#{name}__")
+    name
   end
 
   # Define a method for synchronous calls.
@@ -139,6 +140,7 @@ class Eventbox
       end
     end
     unbound_method = self.instance_method("__#{name}__")
+    name
   end
 
   # Define a method for synchronous calls with asynchronous result.
@@ -160,6 +162,7 @@ class Eventbox
         callback_loop(answer_queue)
       end
     end
+    name
   end
 
   private :callback_loop

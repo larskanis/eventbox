@@ -111,7 +111,9 @@ class ThreadPool < Eventbox
     end
   end
 
-  yield_call def next_job(result)
+  # Get the next job or wait for one
+  # The method is protected, so that it's accessible in the pool_thread action but not externally
+  protected yield_call def next_job(result)
     if @que.empty?            # No job pooled?
       @jobless << result      # Enqueue the action thread to the list of jobless workers
     else                      # Already pooled jobs?
@@ -119,6 +121,7 @@ class ThreadPool < Eventbox
     end
   end
 
+  # Enqueue a new job
   async_call def pool(&block)
     if @jobless.empty?        # No jobless thread available?
       @que << block           # Append the external block as job into the queue

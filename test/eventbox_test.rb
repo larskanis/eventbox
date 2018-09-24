@@ -598,6 +598,27 @@ class EventboxTest < Minitest::Test
     assert_equal [45, pr], fc.many(44, pr)
   end
 
+  def test_call_definition_returns_name
+    v = nil
+    Class.new(Eventbox) do
+      v = async_call def test_async
+      end
+    end
+    assert_equal :test_async, v
+
+    Class.new(Eventbox) do
+      v = sync_call def test_sync
+      end
+    end
+    assert_equal :test_sync, v
+
+    Class.new(Eventbox) do
+      v = yield_call def test_yield
+      end
+    end
+    assert_equal :test_yield, v
+  end
+
   def test_action_from_wrong_thread
     eb = Class.new(Eventbox) do
       sync_call def init
@@ -734,7 +755,7 @@ class EventboxTest < Minitest::Test
       end
     end
 
-    yield_call def next_task(workerid, input)
+    private yield_call def next_task(workerid, input)
       if @tasks.empty?
         @waiting[workerid] = input
       else
@@ -744,7 +765,7 @@ class EventboxTest < Minitest::Test
       end
     end
 
-    async_call def task_finished(workerid, result)
+    private async_call def task_finished(workerid, result)
       @working.delete(workerid).yield result
     end
   end
@@ -777,10 +798,10 @@ class EventboxTest < Minitest::Test
       check_work
     end
 
-    yield_call :next_task do |workerid, input|
+    private(yield_call(:next_task) do |workerid, input|
       @waiting[workerid] = input
       check_work
-    end
+    end)
   end
 
   def test_concurrent_workers2
@@ -1023,7 +1044,7 @@ class EventboxTest < Minitest::Test
       end
     end
 
-    yield_call def next_job(result)
+    protected yield_call def next_job(result)
       if @que.empty?
         @jobless << result
       else
