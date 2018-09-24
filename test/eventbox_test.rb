@@ -1077,6 +1077,9 @@ class EventboxTest < Minitest::Test
   end
 
   def test_shutdown
+    GC.start    # Try to sweep other pending threads
+    sleep 0.01
+
     c1 = Thread.list.length
     eb = TestInitWithPendingAction.new
     c2 = Thread.list.length
