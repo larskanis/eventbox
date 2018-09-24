@@ -1,40 +1,31 @@
 class Eventbox
   class ObjectRegistry
     class << self
-      @@objects = {}
-      @@mutex = Mutex.new
-
       def taggable?(object)
         case object
         when Integer, InternalObject, ExternalObject
           false
         else
-          true
+          if object.frozen?
+            false
+          else
+            true
+          end
         end
       end
 
-      def set_tag(object, owning_thread)
+      def set_tag(object, new_tag)
         raise InvalidAccess, "object is not taggable: #{object.inspect}" unless taggable?(object)
-        @@mutex.synchronize do
-          tag = @@objects[object.object_id]
-          if tag && tag != owning_thread
-            raise InvalidAccess, "object #{object.inspect} is already tagged to #{tag.inspect}"
-          end
-          @@objects[object.object_id] = owning_thread
+
+        tag = object.instance_variable_get(:@__event_box_tag__)
+        if tag && tag != new_tag
+          raise InvalidAccess, "object #{object.inspect} is already tagged to #{tag.inspect}"
         end
-        ObjectSpace.define_finalizer(object, method(:untag))
+        object.instance_variable_set(:@__event_box_tag__, new_tag)
       end
 
       def get_tag(object)
-        @@mutex.synchronize do
-          @@objects[object.object_id]
-        end
-      end
-
-      def untag(object_id)
-        @@mutex.synchronize do
-          @@objects.delete(object_id)
-        end
+        object.instance_variable_get(:@__event_box_tag__)
       end
     end
   end

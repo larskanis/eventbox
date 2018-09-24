@@ -386,12 +386,19 @@ class EventboxTest < Minitest::Test
     eb = Class.new(Eventbox) do
       sync_call def go(str)
         mutable_object(str)
-      rescue => err
-        @res = err.to_s
       end
     end.new
 
-    assert_match(/not taggable/, eb.go(eb.mutable_object("mutable")))
+    err = assert_raises(Eventbox::InvalidAccess) { eb.go(eb.mutable_object("mutable")) }
+    assert_match(/not taggable/, err.to_s)
+  end
+
+  def test_untaggable_object
+    eb = Class.new(Eventbox) do
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess) { eb.mutable_object("mutable".freeze) }
+    assert_match(/not taggable/, err.to_s)
   end
 
   class Yielder1 < Eventbox
