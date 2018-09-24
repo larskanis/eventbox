@@ -116,12 +116,6 @@ class Eventbox
   end
 
   class WrappedProc < Proc
-    attr_reader :name
-    def initialize(object, event_loop, name=nil)
-      @object = object
-      @event_loop = event_loop
-      @name = name
-    end
   end
 
   class InternalProc < WrappedProc
@@ -137,6 +131,13 @@ class Eventbox
   end
 
   class ExternalProc < WrappedProc
+    attr_reader :name
+    def initialize(object, event_loop, name=nil)
+      @object = object
+      @event_loop = event_loop
+      @name = name
+    end
+
     def direct_callable?
       !@event_loop.internal_thread?
     end

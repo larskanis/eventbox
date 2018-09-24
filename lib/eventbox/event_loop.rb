@@ -109,8 +109,8 @@ class Eventbox
     end
 
     def new_async_proc(name=nil, &block)
-      AsyncProc.new(block, self, name) do |*args, &cbblock|
-        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+      AsyncProc.new do |*args, &cbblock|
+        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
         if internal_thread?
           # called internally
           block.yield(*args)
@@ -123,8 +123,8 @@ class Eventbox
     end
 
     def new_sync_proc(name=nil, &block)
-      SyncProc.new(block, self, name) do |*args, &cbblock|
-        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+      SyncProc.new do |*args, &cbblock|
+        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
         if internal_thread?
           # called internally
           block.yield(*args)
@@ -139,8 +139,8 @@ class Eventbox
     end
 
     def new_yield_proc(name=nil, &block)
-      YieldProc.new(block, self, name) do |*args, &cbblock|
-        raise InvalidAccess, "yieding a #{self.class} with block is not supported" if cbblock
+      YieldProc.new do |*args, &cbblock|
+        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
         if internal_thread?
           # called internally
           raise InvalidAccess, "yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
