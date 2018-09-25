@@ -17,7 +17,7 @@ class Eventbox
       def set_tag(object, new_tag)
         raise InvalidAccess, "object is not taggable: #{object.inspect}" unless taggable?(object)
 
-        tag = object.instance_variable_get(:@__event_box_tag__)
+        tag = get_tag(object)
         if tag && tag != new_tag
           raise InvalidAccess, "object #{object.inspect} is already tagged to #{tag.inspect}"
         end
@@ -25,7 +25,7 @@ class Eventbox
       end
 
       def get_tag(object)
-        object.instance_variable_get(:@__event_box_tag__)
+        object.instance_variable_defined?(:@__event_box_tag__) && object.instance_variable_get(:@__event_box_tag__)
       end
     end
   end

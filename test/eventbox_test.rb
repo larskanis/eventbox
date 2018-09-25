@@ -399,6 +399,8 @@ class EventboxTest < Minitest::Test
 
     err = assert_raises(Eventbox::InvalidAccess) { eb.mutable_object("mutable".freeze) }
     assert_match(/not taggable/, err.to_s)
+    err = assert_raises(Eventbox::InvalidAccess) { eb.mutable_object(123) }
+    assert_match(/not taggable/, err.to_s)
   end
 
   class Yielder1 < Eventbox
