@@ -1098,4 +1098,54 @@ class EventboxTest < Minitest::Test
     c3 = Thread.list.length
     assert_equal c1, c3, "The new thread should be removed"
   end
+
+  class TestActionRaise < Eventbox
+    class Stop < AbortAction
+      def initialize(result)
+        @result = result
+      end
+      attr_reader :result
+    end
+
+    async_call def init
+      @a = action def sleepy
+        sleep
+      rescue Stop => err
+        err.result.yield(err)
+      end
+    end
+
+    yield_call def stop(result)
+      @a.raise(Stop, result)
+    end
+
+    attr_reader :a
+  end
+
+  def test_action_raise
+    eb = TestActionRaise.new
+    assert_kind_of Eventbox::Action, eb.a
+    assert_equal :sleepy, eb.a.name
+    assert_kind_of TestActionRaise::Stop, eb.stop
+  end
+
+  def test_action_raise_abort_in_init
+    eb = Class.new(Eventbox) do
+      yield_call def init(str, result)
+        a = action str+"b", result, def sleepy(str, result)
+          str << "c"
+          sleep
+        ensure
+          self.str = str+"d"
+          result.yield
+        end
+
+        a.raise(Eventbox::AbortAction)
+      end
+
+      attr_accessor :str
+    end.new("a")
+
+    assert_equal "abcd", eb.str
+  end
 end

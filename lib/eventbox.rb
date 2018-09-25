@@ -165,8 +165,6 @@ class Eventbox
     name
   end
 
-  private :callback_loop
-
   def self.attr_writer(name)
     async_call("#{name}=") do |value|
       instance_variable_set("@#{name}", value)
@@ -213,7 +211,7 @@ class Eventbox
   # A wrapper object (kind of Eventbox::MutableWrapper) is unwrapped before passed to the called block.
   # Any other object is passed as a deep copy through Marshal.dump and Marshal.load .
   #
-  # Actions can return state changes or objects to the event loop by calls to methods created by #async_call, #sync_call or #yield_call or by calling async_proc, sync_proc or yield_proc objects.
+  # Actions can return state changes or objects to the event loop by calls to methods created by #async_call, #sync_call or #yield_call or through calling async_proc, sync_proc or yield_proc objects.
   # To avoid unsafe shared objects, the action block doesn't have access to local variables, instance variables or instance methods other then methods defined per #async_call, #sync_call or #yield_call .
   #
   # An action can be started as named action like:
@@ -227,6 +225,16 @@ class Eventbox
   #       sleep 1
   #     end
   #   end
+  #
+  # `action` returns an Action object.
+  # It can be used to stop the action while blocking operations:
+  #   async_call def init
+  #     a = action def sleepy
+  #       sleep
+  #     end
+  #     a.raise(Eventbox::AbortAction)
+  #   end
+  #
   #
   def action(*args)
     raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
@@ -250,8 +258,7 @@ class Eventbox
     end
 
     args = sanity_before_queue(args)
-    # Start a new action thread
+    # Start a new action thread and return an Action instance
     @event_loop._start_action(meth, args)
-    nil
   end
 end

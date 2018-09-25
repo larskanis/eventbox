@@ -38,8 +38,8 @@ class Eventbox
       end
     end
 
-    def internal_thread?
-      Thread.current==@ctrl_thread
+    def internal_thread?(current_thread=Thread.current)
+      current_thread==@ctrl_thread
     end
 
     def with_call_frame(name, answer_queue)
@@ -223,6 +223,8 @@ class Eventbox
       @action_threads[new_thread] = true
 
       _abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
+
+      Action.new(meth.name, new_thread, self)
     end
   end
 end

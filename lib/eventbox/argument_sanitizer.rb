@@ -8,8 +8,9 @@ class Eventbox
 
     def sanity_before_queue2(arg, name)
       case arg
-      # If object is already wrapped -> pass through
-      when WrappedObject, WrappedProc
+      when WrappedObject, WrappedProc, Action # If object is already wrapped -> pass it through
+        arg
+      when Module # Class or Module definitions are passed through
         arg
       when Proc
         event_loop.wrap_proc(arg, name)
@@ -38,30 +39,19 @@ class Eventbox
       args.is_a?(Array) ? args.map { |arg| sanity_before_queue2(arg, name) } : sanity_before_queue2(args, name)
     end
 
-    def sanity_after_queue2(arg)
+    def sanity_after_queue2(arg, current_thread=Thread.current)
       case arg
       when WrappedObject
-        arg.access_allowed? ? arg.object : arg
+        arg.access_allowed?(current_thread) ? arg.object : arg
       when ExternalProc
-        arg.direct_callable? ? arg.object : arg
+        arg.direct_callable?(current_thread) ? arg.object : arg
       else
         arg
       end
     end
 
-    def sanity_after_queue(args)
-      args.is_a?(Array) ? args.map(&method(:sanity_after_queue2)) : sanity_after_queue2(args)
-    end
-
-    public
-
-    def mutable_object(object)
-      if event_loop.internal_thread?
-        ObjectRegistry.set_tag(object, event_loop)
-      else
-        ObjectRegistry.set_tag(object, :extern)
-      end
-      object
+    def sanity_after_queue(args, current_thread=Thread.current)
+      args.is_a?(Array) ? args.map { |arg| sanity_after_queue2(arg, current_thread) } : sanity_after_queue2(args, current_thread)
     end
 
     def callback_loop(answer_queue)
@@ -82,6 +72,17 @@ class Eventbox
         end
       end
     end
+
+    public
+
+    def mutable_object(object)
+      if event_loop.internal_thread?
+        ObjectRegistry.set_tag(object, event_loop)
+      else
+        ObjectRegistry.set_tag(object, :extern)
+      end
+      object
+    end
   end
 
   class WrappedObject
@@ -94,8 +95,8 @@ class Eventbox
   end
 
   class InternalObject < WrappedObject
-    def access_allowed?
-      @event_loop.internal_thread?
+    def access_allowed?(current_thread=Thread.current)
+      @event_loop.internal_thread?(current_thread)
     end
 
     def object
@@ -105,8 +106,8 @@ class Eventbox
   end
 
   class ExternalObject < WrappedObject
-    def access_allowed?
-      !@event_loop.internal_thread?
+    def access_allowed?(current_thread=Thread.current)
+      !@event_loop.internal_thread?(current_thread)
     end
 
     def object
@@ -138,13 +139,35 @@ class Eventbox
       @name = name
     end
 
-    def direct_callable?
-      !@event_loop.internal_thread?
+    def direct_callable?(current_thread=Thread.current)
+      !@event_loop.internal_thread?(current_thread)
     end
 
     def object
       raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?
       @object
+    end
+  end
+
+  class Action
+    include ArgumentSanitizer
+    attr_reader :name
+
+    def initialize(name, thread, event_loop)
+      @name = name
+      @thread = thread
+      @event_loop = event_loop
+    end
+
+    attr_reader :event_loop
+    private :event_loop
+
+    def raise(*args)
+      if @event_loop.internal_thread?(@thread)
+        args = sanity_before_queue(args)
+        args = sanity_after_queue(args, @thread)
+      end
+      @thread.raise(*args)
     end
   end
 end
