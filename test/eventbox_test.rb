@@ -1150,4 +1150,51 @@ class EventboxTest < Minitest::Test
 
     assert_equal "abcd", eb.str
   end
+
+  def test_sync_call_with_callback_recursive
+    eb = Class.new(Eventbox) do
+      sync_call def callback(str, &block)
+        if block
+          block.yield(str+"d")
+        end
+        str+"b"
+      end
+    end.new
+
+    res2 = res3 = nil
+    res1 = eb.callback("a") do |str1|
+      res2 = eb.callback(str1+"e") do |str2|
+        res3 = eb.callback(str2+"f")
+      end
+    end
+
+    assert_equal "ab", res1
+    assert_equal "adeb", res2
+    assert_equal "adedfb", res3
+  end
+
+  def test_yield_call_with_callback_recursive
+    eb = Class.new(Eventbox) do
+      yield_call def callback(str, result, &block)
+        if block
+          block.yield(str+"d") do |str2|
+            result.yield str2+"c"
+          end
+        else
+          result.yield str+"b"
+        end
+      end
+    end.new
+
+    res2 = res3 = nil
+    res1 = eb.callback("a") do |str1|
+      res2 = eb.callback(str1+"e") do |str2|
+        res3 = eb.callback(str2+"f")
+      end
+    end
+
+    assert_equal "adedfbcc", res1
+    assert_equal "adedfbc", res2
+    assert_equal "adedfb", res3
+  end
 end
