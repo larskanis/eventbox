@@ -36,7 +36,7 @@ class EventboxTest < Minitest::Test
     end
   end
 
-  def _test_100_init_with_pending_action
+  def test_100_init_with_pending_action
     100.times do
       TestInitWithPendingAction.new
     end
