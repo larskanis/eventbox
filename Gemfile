@@ -7,5 +7,4 @@ gemspec
 
 group :test do
   gem 'simplecov', require: false
-  gem "minitest-hooks", "~> 1.4"
 end

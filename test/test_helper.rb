@@ -26,6 +26,19 @@ END {
 $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
 require "eventbox"
 require "minitest/autorun"
-require "minitest/hooks/test"
 
 Thread.abort_on_exception = true
+
+def with_report_on_exception(enabled)
+  if Thread.respond_to?(:report_on_exception)
+    old = Thread.report_on_exception
+    Thread.report_on_exception = enabled
+    begin
+      yield
+    ensure
+      Thread.report_on_exception = old
+    end
+  else
+    yield
+  end
+end
