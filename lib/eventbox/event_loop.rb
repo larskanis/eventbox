@@ -184,12 +184,13 @@ class Eventbox
         InternalObject.new(arg, self, name)
       else
         ExternalProc.new(arg, self, name) do |*args, &block|
-          if !internal_thread?
+          if internal_thread?
+            # called internally -> @mutex is already locked
+            raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be called with acquired lock only" unless @mutex.locked?
+            _external_proc_call(arg, name, args, block)
+          else
             # called externally
             raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped externally"
-          else
-            # called internally
-            _external_proc_call(arg, name, args, block)
           end
         end
       end
