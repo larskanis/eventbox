@@ -42,7 +42,7 @@ class Eventbox
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
     @event_loop = EventLoop.new(threadpool)
-    ObjectSpace.define_finalizer(self, @event_loop.method(:_shutdown))
+    ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
 
     init(*args, &block)
   end

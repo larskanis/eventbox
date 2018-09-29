@@ -1,10 +1,17 @@
 class Eventbox
+  # @private
+  #
+  # This class manages the calls to internal methods and procs comparable to an event loop.
+  # It doesn't use an explicit event loop, but uses the calling thread to process the event.
+  #
+  # All methods prefixed with "_" requires @mutex acquired to be called.
   class EventLoop
     include ArgumentSanitizer
 
     def initialize(threadpool)
       @threadpool = threadpool
-      @action_threads = {}
+      @action_threads = []
+      @action_threads_for_gc = []
       @ctrl_thread = nil
       @mutex = Mutex.new
       @shutdown = false
@@ -14,28 +21,29 @@ class Eventbox
       self
     end
 
-    def shutdown
-      @mutex.synchronize do
-        _shutdown
-      end
-      nil
-    end
-
-    def _abort_thread(thread, reason)
+    def abort_thread(thread, reason)
       thread.raise AbortAction, "abort action thread by #{reason}"
     end
 
-    def _shutdown(object_id=nil)
-#       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:first).map(&:object_id).join(",")}"
+    def shutdown(object_id=nil)
+#       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:object_id).join(",")}"
 
-      # The finalizer doesn't allow suspension per Mutex, so that we access @action_threads unprotected.
+      # The finalizer doesn't allow suspension per Mutex, so that we access a read-only copy of @action_threads.
       # To avoid race conditions with thread creation, set a flag before the loop.
       @shutdown = true
 
       # terminate all running action threads
-      @action_threads.each do |th, _|
-        _abort_thread(th, "garbage collector".freeze)
+      @action_threads_for_gc.each do |th|
+        abort_thread(th, "garbage collector".freeze)
       end
+
+      nil
+    end
+
+    # Make a copy of the thread list for use in shutdown.
+    # The copy is replaced per an atomic operation, so that it can be read lock-free in shutdown.
+    def _update_action_threads_for_gc
+      @action_threads_for_gc = @action_threads.dup
     end
 
     def internal_thread?(current_thread=Thread.current)
@@ -190,6 +198,7 @@ class Eventbox
     def thread_finished(thread)
       @mutex.synchronize do
         @action_threads.delete(thread) or raise(ArgumentError, "unknown thread has finished")
+        _update_action_threads_for_gc
       end
     end
 
@@ -220,9 +229,11 @@ class Eventbox
           end
         end
       end
-      @action_threads[new_thread] = true
+      @action_threads << new_thread
+      _update_action_threads_for_gc
 
-      _abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
+      # @shutdown is set without a lock, so that we need to re-check, if it was set while _start_action
+      abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
 
       Action.new(meth.name, new_thread, self)
     end
