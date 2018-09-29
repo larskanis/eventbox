@@ -309,7 +309,7 @@ class EventboxActionTest < Minitest::Test
   end
 
   class TestActionRaise < Eventbox
-    class Stop < AbortAction
+    class Stop < Interrupt
       def initialize(result)
         @result = result
       end
@@ -318,7 +318,9 @@ class EventboxActionTest < Minitest::Test
 
     async_call def init
       @a = action def sleepy
-        sleep
+        Thread.handle_interrupt(Stop => :on_blocking) do
+          sleep
+        end
       rescue Stop => err
         err.result.yield(err)
       end
@@ -350,6 +352,30 @@ class EventboxActionTest < Minitest::Test
         end
 
         a.raise(Eventbox::AbortAction)
+      end
+
+      attr_accessor :str
+    end.new("a")
+
+    assert_equal "abcd", eb.str
+  end
+
+  def test_action_raise_abort_in_init_with_action_param
+    eb = Class.new(Eventbox) do
+      yield_call def init(str, result)
+        @str = str+"b"
+        action result, def sleepy(result, ac)
+          stop_myself(ac)
+          sleep
+        ensure
+          self.str += "d"
+          result.yield
+        end
+      end
+
+      async_call def stop_myself(ac)
+        ac.raise(Eventbox::AbortAction)
+        @str << "c"
       end
 
       attr_accessor :str

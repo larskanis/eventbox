@@ -218,7 +218,7 @@ class Eventbox
 
   # Run a block as asynchronous action.
   #
-  # The action is executed through the threadpool given to TODO .
+  # The action is executed through the threadpool given to {with_options}.
   #
   # Each argument is passed to the block either as a copy or as a unwrapped object.
   # A wrapper object (kind of Eventbox::MutableWrapper) is unwrapped before passed to the called block.
@@ -232,23 +232,16 @@ class Eventbox
   #     sleep 1
   #   end
   #
-  # or as an anonnymous action like:
+  # or as an anonnymous action (deprecated) like:
   #   action(param1, tso(param2)) do |o|
   #     def o.o(param1, param2)
   #       sleep 1
   #     end
   #   end
   #
-  # `action` returns an Action object.
-  # It can be used to stop the action while blocking operations:
-  #   async_call def init
-  #     a = action def sleepy
-  #       sleep
-  #     end
-  #     a.raise(Eventbox::AbortAction)
-  #   end
-  #
-  #
+  # {action} returns an Action object.
+  # It can be used to interrupt the program execution by an exception.
+  # See {Eventbox::Action} for further information.
   def action(*args)
     raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
 

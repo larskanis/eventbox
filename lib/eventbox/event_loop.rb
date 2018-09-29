@@ -216,13 +216,19 @@ class Eventbox
     end
 
     def _start_action(meth, args)
-      new_thread = Thread.handle_interrupt(AbortAction => :never) do
+      qu = Queue.new
+
+      new_thread = Thread.handle_interrupt(Exception => :never) do
         @threadpool.new do
           begin
             Thread.handle_interrupt(AbortAction => :on_blocking) do
               args = sanity_after_queue(args)
 
-              meth.call(*args)
+              if meth.arity == args.length
+                meth.call(*args)
+              else
+                meth.call(*args, qu.deq)
+              end
             end
           rescue AbortAction
           ensure
@@ -236,7 +242,9 @@ class Eventbox
       # @shutdown is set without a lock, so that we need to re-check, if it was set while _start_action
       abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
 
-      Action.new(meth.name, new_thread, self)
+      a = Action.new(meth.name, new_thread, self)
+      qu << a
+      a
     end
   end
 end
