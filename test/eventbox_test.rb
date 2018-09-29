@@ -7,27 +7,6 @@ class EventboxTest < Minitest::Test
     assert_match(/\A\d+\.\d+\.\d+/, ::Eventbox::VERSION)
   end
 
-  def before_all
-    @start_threads = Thread.list
-  end
-
-  def after_all
-    # Trigger ObjectRegistry#untag and thread stopping
-    GC.start
-    sleep 0.1 if (Thread.list - @start_threads).any?
-
-    lingering = Thread.list - @start_threads
-    if lingering.any?
-      warn "Warning: #{lingering.length} lingering threads"
-      lingering.each do |th|
-        line = th.backtrace&.find{|t| t=~/test\// } or
-            th.backtrace&.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) } or
-            th.backtrace&.first
-        warn "    #{ line }"
-      end
-    end
-  end
-
   def with_report_on_exception(enabled)
     if Thread.respond_to?(:report_on_exception)
       old = Thread.report_on_exception
@@ -57,7 +36,7 @@ class EventboxTest < Minitest::Test
     end
   end
 
-  def _test_100_init_with_pending_action
+  def test_100_init_with_pending_action
     100.times do
       TestInitWithPendingAction.new
     end
