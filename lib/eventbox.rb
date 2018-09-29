@@ -12,13 +12,40 @@ class Eventbox
   class MultipleResults < RuntimeError; end
   class AbortAction < RuntimeError; end
 
+  # The options for instantiation of this class.
+  def self.eventbox_options
+    {
+      threadpool: Thread,
+    }
+  end
+
+  # Create a new derived class with the given options.
+  #
+  # The options are merged with the options of the base class.
+  # See eventbox_options for available options.
+  def self.with_options(**options)
+    Class.new(self) do
+      define_singleton_method(:eventbox_options) do
+        super().merge(options)
+      end
+
+      def self.inspect
+        klazz = self
+        until name=klazz.name
+          klazz = klazz.superclass
+        end
+        "#{name}#{eventbox_options}"
+      end
+    end
+  end
+
   private
 
   # Create a new Eventbox instance.
   #
   # All arguments are passed to the init() method when defined.
   def initialize(*args, &block)
-    threadpool = Thread
+    threadpool = self.class.eventbox_options.fetch(:threadpool)
 
     # TODO Better hide instance variables
     @eventbox = self
