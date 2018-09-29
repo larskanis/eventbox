@@ -1151,6 +1151,38 @@ class EventboxTest < Minitest::Test
     assert_equal "abcd", eb.str
   end
 
+  def test_action_can_call_methods_from_base_class
+    ec = Class.new(Eventbox) do
+      attr_reader :str
+    end
+    eb = Class.new(ec) do
+      yield_call def go(result)
+        @str = "a"
+        action result, def action_thread(result)
+          result.yield str
+        end
+      end
+    end.new
+
+    assert_equal "a", eb.go
+  end
+
+  def test_action_can_call_methods_from_sub_class
+    ec = Class.new(Eventbox) do
+      yield_call def go(result)
+        @str = "a"
+        action result, def action_thread(result)
+          result.yield str
+        end
+      end
+    end
+    eb = Class.new(ec) do
+      attr_reader :str
+    end.new
+
+    assert_equal "a", eb.go
+  end
+
   def test_sync_call_with_callback_recursive
     eb = Class.new(Eventbox) do
       sync_call def callback(str, &block)
