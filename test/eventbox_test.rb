@@ -382,7 +382,7 @@ class EventboxTest < Minitest::Test
     assert_same str, str2
   end
 
-  def test_untaggable_object
+  def test_untaggable_object_intern
     eb = Class.new(Eventbox) do
       sync_call def go(str)
         mutable_object(str)
@@ -393,7 +393,7 @@ class EventboxTest < Minitest::Test
     assert_match(/not taggable/, err.to_s)
   end
 
-  def test_untaggable_object
+  def test_untaggable_object_extern
     eb = Class.new(Eventbox) do
     end.new
 
