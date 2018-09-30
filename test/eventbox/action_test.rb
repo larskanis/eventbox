@@ -1,6 +1,9 @@
 require_relative "../test_helper"
 
 class EventboxActionTest < Minitest::Test
+  # TODO run tests with threadpool enabled
+  # Eventbox = ::Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(3, run_gc_when_busy: true))
+
   class FcSleep < Eventbox
     yield_call def wait(time, result)
       action time, result do |o|

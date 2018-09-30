@@ -21,10 +21,6 @@ class Eventbox
       self
     end
 
-    def abort_thread(thread, reason)
-      thread.raise AbortAction, "abort action thread by #{reason}"
-    end
-
     def shutdown(object_id=nil)
 #       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:object_id).join(",")}"
 
@@ -33,9 +29,7 @@ class Eventbox
       @shutdown = true
 
       # terminate all running action threads
-      @action_threads_for_gc.each do |th|
-        abort_thread(th, "garbage collector".freeze)
-      end
+      @action_threads_for_gc.each(&:abort)
 
       nil
     end
@@ -232,18 +226,22 @@ class Eventbox
             end
           rescue AbortAction
           ensure
-            thread_finished(Thread.current)
+            thread_finished(qu.deq)
           end
         end
       end
-      @action_threads << new_thread
+
+      a = Action.new(meth.name, new_thread, self)
+      # Enqueue the action twice (for call and for finish)
+      qu << a << a
+
+      # Add to the list of running actions
+      @action_threads << a
       _update_action_threads_for_gc
 
       # @shutdown is set without a lock, so that we need to re-check, if it was set while _start_action
-      abort_thread(new_thread, "pending shutdown".freeze) if @shutdown
+      a.abort if @shutdown
 
-      a = Action.new(meth.name, new_thread, self)
-      qu << a
       a
     end
   end

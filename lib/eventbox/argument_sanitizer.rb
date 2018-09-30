@@ -12,6 +12,8 @@ class Eventbox
         arg
       when Module # Class or Module definitions are passed through
         arg
+      when Eventbox # Eventbox objects already sanitize all inputs and outputs and are thread safe
+        arg
       when Proc
         event_loop.wrap_proc(arg, name)
       else
@@ -192,6 +194,10 @@ class Eventbox
         args = sanity_after_queue(args, @thread)
       end
       @thread.raise(*args)
+    end
+
+    def abort
+      @thread.raise AbortAction
     end
   end
 end
