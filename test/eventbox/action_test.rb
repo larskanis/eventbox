@@ -455,4 +455,5 @@ class EventboxActionTest < Minitest::Test
     c3 = Thread.list.length
     assert_equal c1, c3, "The new thread should be removed"
   end
+
 end

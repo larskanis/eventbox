@@ -16,27 +16,4 @@ class EventboxActionTest < Minitest::Test
     assert_equal 50.times.to_a, results.map(&:first).sort
     assert_equal 3, results.map(&:last).uniq.size
   end
-
-  def test_100_actions
-    ec = Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(2))
-    eb = Class.new(ec) do
-      yield_call def init(result)
-        @ids = []
-        100.times do |id|
-          action id, result, def adder(id, result)
-            add(id, result)
-          end
-        end
-      end
-
-      async_call def add(id, result)
-        @ids << id
-        result.yield if @ids.size == 100
-      end
-
-      attr_reader :ids
-    end.new
-
-    assert_equal 100.times.to_a, eb.ids.sort
-  end
 end

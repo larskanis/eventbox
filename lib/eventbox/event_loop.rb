@@ -8,13 +8,27 @@ class Eventbox
   class EventLoop
     include ArgumentSanitizer
 
-    def initialize(threadpool)
+    def initialize(threadpool, guard_time)
       @threadpool = threadpool
       @action_threads = []
       @action_threads_for_gc = []
       @ctrl_thread = nil
       @mutex = Mutex.new
       @shutdown = false
+      @guard_time_proc = case guard_time
+        when NilClass
+          nil
+        when Numeric
+          guard_time and proc do |dt, name|
+            if dt > guard_time
+              warn "guard time exceeded: #{"%2.3f" % dt} sec (limit is #{guard_time}) in `#{name}' - please move blocking tasks to actions"
+            end
+          end
+        when Proc
+          guard_time
+        else
+          raise ArgumentError, "guard_time should be Numeric, Proc or nil"
+      end
     end
 
     def event_loop
@@ -50,8 +64,11 @@ class Eventbox
         @latest_answer_queue = answer_queue
         @latest_call_name = name
         @ctrl_thread = Thread.current
+        start_time = Time.now
         yield
       ensure
+        diff_time = Time.now - start_time
+        @guard_time_proc&.call(diff_time, name)
         @latest_answer_queue = nil
         @latest_call_name = nil
         @ctrl_thread = nil

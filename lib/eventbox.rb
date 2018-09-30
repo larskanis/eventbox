@@ -17,6 +17,7 @@ class Eventbox
   def self.eventbox_options
     {
       threadpool: Thread,
+      guard_time: 0.1,
     }
   end
 
@@ -46,7 +47,7 @@ class Eventbox
   #
   # All arguments are passed to the init() method when defined.
   def initialize(*args, &block)
-    threadpool = self.class.eventbox_options.fetch(:threadpool)
+    threadpool = self.class.eventbox_options[:threadpool]
 
     # TODO Better hide instance variables
     @eventbox = self
@@ -69,7 +70,7 @@ class Eventbox
 
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
-    @event_loop = EventLoop.new(threadpool)
+    @event_loop = EventLoop.new(threadpool, self.class.eventbox_options[:guard_time])
     ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
 
     init(*args, &block)
