@@ -374,8 +374,8 @@ class EventboxActionTest < Minitest::Test
       end
 
       async_call def stop_myself(ac)
-        ac.raise(Eventbox::AbortAction)
         @str << "c"
+        ac.raise(Eventbox::AbortAction)
       end
 
       attr_accessor :str
