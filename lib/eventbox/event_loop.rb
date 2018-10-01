@@ -31,10 +31,12 @@ class Eventbox
       end
     end
 
+    # Used in ArgumentSanitizer
     def event_loop
       self
     end
 
+    # Abort all running action threads.
     def shutdown(object_id=nil)
 #       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:object_id).join(",")}"
 
@@ -54,7 +56,12 @@ class Eventbox
       @action_threads_for_gc = @action_threads.dup
     end
 
+    # Is the caller running within the internal context?
     def internal_thread?(current_thread=Thread.current)
+      # Access to @ctrl_thread is lock-free, because
+      # - assignment to @ctrl_thread is atomic,
+      # - equality comparison is atomic and
+      # - @ctrl_thread is nil or a Thread and both evaluate to false for external threads.
       current_thread==@ctrl_thread
     end
 

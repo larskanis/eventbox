@@ -1,4 +1,18 @@
 class Eventbox
+  # Mixin for argument sanitation.
+  #
+  # All call arguments are passed through as either copies or wrapped objects.
+  # Certain object types are passed through unchanged.
+  #
+  # * If the object is mashalable, it is passed as a deep copy through Marshal.dump and Marshal.load .
+  #   An object which faild to marshal is wrapped as {ExternalObject}.
+  # * Proc objects passed from internal to external are wrapped as {InternalObject}.
+  #   They are unwrapped when passed back to internal.
+  # * Proc objects passed from external to internal are wrapped as {ExternalProc}.
+  #   They are unwrapped when passed back to external.
+  # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc} are passed through without change.
+  #
+  # ArgumentSanitizer expects the method `event_loop' to return the related EventLoop instance.
   module ArgumentSanitizer
     private
 
@@ -96,6 +110,7 @@ class Eventbox
     end
   end
 
+  # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
   class InternalObject < WrappedObject
     def access_allowed?(current_thread=Thread.current)
       @event_loop.internal_thread?(current_thread)
@@ -107,6 +122,7 @@ class Eventbox
     end
   end
 
+  # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
     def access_allowed?(current_thread=Thread.current)
       !@event_loop.internal_thread?(current_thread)
@@ -148,56 +164,6 @@ class Eventbox
     def object
       raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?
       @object
-    end
-  end
-
-  # An Action object is returned by {Eventbox#action}. It can be used to interrupt the program execution by an exception.
-  #
-  # However in contrast to ruby's builtin threads, by default any exceptions sent to the action thread are delayed until a code block is reached which explicit allows interruption.
-  # The only exception which is delivered to the action thread by default is {Eventbox::AbortAction}.
-  # It is raised by {shutdown} and is delivered as soon as a blocking operation is executed.
-  #
-  # An Action object can be used to stop the action while blocking operations.
-  # Make sure, that the `rescue` statement is outside of the block to `handle_interrupt`.
-  # Otherwise it could happen, that the rescuing code is interrupted by the signal.
-  # Sending custom signals to an action works like:
-  #
-  #   class MySignal < Interrupt
-  #   end
-  #
-  #   async_call def init
-  #     a = action def sleepy
-  #       Thread.handle_interrupt(MySignal => :on_blocking) do
-  #         sleep
-  #       end
-  #     rescue MySignal
-  #       puts "well-rested"
-  #     end
-  #     a.raise(MySignal)
-  #   end
-  class Action
-    include ArgumentSanitizer
-    attr_reader :name
-
-    def initialize(name, thread, event_loop)
-      @name = name
-      @thread = thread
-      @event_loop = event_loop
-    end
-
-    attr_reader :event_loop
-    private :event_loop
-
-    def raise(*args)
-      if @event_loop.internal_thread?(@thread)
-        args = sanity_before_queue(args)
-        args = sanity_after_queue(args, @thread)
-      end
-      @thread.raise(*args)
-    end
-
-    def abort
-      @thread.raise AbortAction
     end
   end
 end
