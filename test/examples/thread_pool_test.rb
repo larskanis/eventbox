@@ -7,11 +7,13 @@ class ExamplesThreadPoolTest < Minitest::Test
       @jobless = []
 
       pool_size.times do
-        action def pool_thread
-          while bl=next_job
-            bl.yield
-          end
-        end
+        pool_thread
+      end
+    end
+
+    action def pool_thread
+      while bl=next_job
+        bl.yield
       end
     end
 

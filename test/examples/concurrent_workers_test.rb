@@ -9,10 +9,12 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
     end
 
     async_call def add_worker(workerid)
-      action workerid, def worker(workerid)
-        while n=next_task(workerid)
-          task_finished(workerid, "#{n} finished")
-        end
+      worker(workerid)
+    end
+
+    action def worker(workerid)
+      while n=next_task(workerid)
+        task_finished(workerid, "#{n} finished")
       end
     end
 

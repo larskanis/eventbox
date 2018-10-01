@@ -464,11 +464,13 @@ class EventboxCallTest < Minitest::Test
   def test_yield_call_with_callback_and_action
     fc = Class.new(Eventbox) do
       yield_call def go(str, result, &block)
-        action str+"b", result, block, def process(str, result, block)
-          str = call_back(block, str+"c")
-          str = call_back(block, str+"g")
-          finish(result, str+"h")
-        end
+        process(str+"b", result, block)
+      end
+
+      action def process(str, result, block)
+        str = call_back(block, str+"c")
+        str = call_back(block, str+"g")
+        finish(result, str+"h")
       end
 
       yield_call def call_back(block, str, result)

@@ -6,12 +6,12 @@ class EventboxActionTest < Minitest::Test
 
   class FcSleep < Eventbox
     yield_call def wait(time, result)
-      action time, result do |o|
-        def o.o time, result
-          sleep(time)
-          timeout(result)
-        end
-      end
+      sleeper(time, result)
+    end
+
+    action :sleeper do |time, result|
+      sleep(time)
+      timeout(result)
     end
 
     async_call def timeout(result)
@@ -28,11 +28,13 @@ class EventboxActionTest < Minitest::Test
   class FcModifyParams < Eventbox
     yield_call def go(str, result)
       @str = str
-      action @str, result, def modify_action(str, result)
-        modify(str, result)
-        str << "c"
-      end
+      modify_action(@str, result)
       @str << "e"
+    end
+
+    action def modify_action(str, result)
+      modify(str, result)
+      str << "c"
     end
 
     private def after_events
@@ -58,9 +60,11 @@ class EventboxActionTest < Minitest::Test
       @out = nil
       @char = nil
       @result = nil
-      action def create_pipe
-        pipeios_opened(*IO.pipe)
-      end
+      create_pipe
+    end
+
+    action def create_pipe
+      pipeios_opened(*IO.pipe)
     end
 
     async_call def pipeios_opened(inp, out)
@@ -71,16 +75,20 @@ class EventboxActionTest < Minitest::Test
 
     private def pipe_active
       if @inp
-        action @inp, def read_pipe inp
-          received(inp.read(1))
-        end
+        read_pipe(@inp)
       end
 
       if @out
-        action @out, def write_pipe out
-          out.write "A"
-        end
+        write_pipe(@out)
       end
+    end
+
+    action def read_pipe inp
+      received(inp.read(1))
+    end
+
+    action def write_pipe out
+      out.write "A"
     end
 
     async_call def received(char)
@@ -109,9 +117,11 @@ class EventboxActionTest < Minitest::Test
     fc = Class.new(Eventbox) do
       yield_call def go(result)
         pr = proc{ 321 }
-        action "111", pr, result, def send_out(num, pr, result)
-          finish num, num.class.to_s, pr, pr.class.to_s, result
-        end
+        send_out("111", pr, result)
+      end
+
+      action def send_out(num, pr, result)
+        finish num, num.class.to_s, pr, pr.class.to_s, result
       end
 
       async_call def finish(num, num_class, pr, pr_class, result)
@@ -130,9 +140,11 @@ class EventboxActionTest < Minitest::Test
     str = "mutable".dup
     fc = Class.new(Eventbox) do
       yield_call def go(str, result)
-        action str, result, def send_out(str, result)
-          finish str.class, str, result
-        end
+        send_out(str, result)
+      end
+
+      action def send_out(str, result)
+        finish str.class, str, result
       end
 
       async_call def finish(str_class, str, result)
@@ -150,10 +162,12 @@ class EventboxActionTest < Minitest::Test
     yield_call :delayed do |pr, i, ths, bl|
       @bl = bl
       ths << Thread.current.object_id
-      action pr, i+1, ths, def finish pr, i, ths
-        ths << Thread.current.object_id
-        finished(pr, i+1, ths)
-      end
+      finish(pr, i+1, ths)
+    end
+
+    action def finish pr, i, ths
+      ths << Thread.current.object_id
+      finished(pr, i+1, ths)
     end
 
     async_call :finished do |pr, i, ths|
@@ -196,12 +210,15 @@ class EventboxActionTest < Minitest::Test
       end
 
       yield_call def b(result)
-        action result, def act(res2)
-          res1 = await_res1
-          res1.yield(1)
-          res2.yield(2)
-        end
+        act(result)
       end
+
+      action def act(res2)
+        res1 = await_res1
+        res1.yield(1)
+        res2.yield(2)
+      end
+
     end.new
 
     th1 = Thread.new { fc.a }
@@ -215,13 +232,16 @@ class EventboxActionTest < Minitest::Test
       sync_call def init
         @error = Thread.new do
           begin
-            action def dummy
-            end
+            dummy
           rescue => err
             err.inspect
           end
         end.value
       end
+
+      action def dummy
+      end
+
       attr_reader :error
     end.new
 
@@ -234,17 +254,19 @@ class EventboxActionTest < Minitest::Test
       attr_accessor :outside_block
       yield_call def local_var(result)
         a_local_variable = "local var"
-        action result, def exiter(result)
-          # the local variable should be overwritten within the block
-          return_res result, begin
-            a_local_variable
-          rescue Exception => err
-            err.to_s
-          end
-        end
+        exiter(result)
         sleep 0.001
         # the local variable shouldn't change, even after the action thread started
         self.outside_block = a_local_variable
+      end
+
+      action def exiter(result)
+        # the local variable should be overwritten within the block
+        return_res result, begin
+          a_local_variable
+        rescue Exception => err
+          err.to_s
+        end
       end
 
       async_call def return_res(result, var)
@@ -261,16 +283,18 @@ class EventboxActionTest < Minitest::Test
       attr_accessor :outside_block
       yield_call def local_var(result)
         a = "local var".dup
-        action a, result, def exiter a, result
-          # the local variable should be overwritten within the block
-          a << " inside block"
-          return_res a, result
-        end
+        exiter(a, result)
 
         sleep 0.001
         # the local variable shouldn't change, even after the action thread started
         a << " outside block"
         self.outside_block = a
+      end
+
+      action def exiter a, result
+        # the local variable should be overwritten within the block
+        a << " inside block"
+        return_res a, result
       end
 
       async_call def return_res(var, result)
@@ -286,29 +310,16 @@ class EventboxActionTest < Minitest::Test
     fc = Class.new(Eventbox) do
       yield_call def inst_var(result)
         @a = "instance var"
-        action result, def exiter(result)
-          return_res(result, instance_variable_defined?("@a"))
-        end
+        exiter(result)
+      end
+      action def exiter(result)
+        return_res(result, instance_variable_defined?("@a"))
       end
       async_call def return_res(result, var)
         result.yield var
       end
     end.new
     assert_equal false, fc.inst_var
-  end
-
-  def test_action_method_name_error
-    with_report_on_exception(false) do
-      err = assert_raises(Eventbox::InvalidAccess) do
-        Class.new(Eventbox) do
-          sync_call def init
-            action def init
-            end
-          end
-        end.new
-      end
-      assert_match(/action method name `init' at/, err.to_s)
-    end
   end
 
   class TestActionRaise < Eventbox
@@ -320,13 +331,15 @@ class EventboxActionTest < Minitest::Test
     end
 
     async_call def init
-      @a = action def sleepy
-        Thread.handle_interrupt(Stop => :on_blocking) do
-          sleep
-        end
-      rescue Stop => err
-        err.result.yield(err)
+      @a = sleepy
+    end
+
+    action def sleepy
+      Thread.handle_interrupt(Stop => :on_blocking) do
+        sleep
       end
+    rescue Stop => err
+      err.result.yield(err)
     end
 
     yield_call def stop(result)
@@ -346,15 +359,16 @@ class EventboxActionTest < Minitest::Test
   def test_action_raise_abort_in_init
     eb = Class.new(Eventbox) do
       yield_call def init(str, result)
-        a = action str+"b", result, def sleepy(str, result)
-          str << "c"
-          sleep
-        ensure
-          self.str = str+"d"
-          result.yield
-        end
-
+        a = sleepy(str+"b", result)
         a.raise(Eventbox::AbortAction)
+      end
+
+      action def sleepy(str, result)
+        str << "c"
+        sleep
+      ensure
+        self.str = str+"d"
+        result.yield
       end
 
       attr_accessor :str
@@ -367,13 +381,15 @@ class EventboxActionTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def init(str, result)
         @str = str+"b"
-        action result, def sleepy(result, ac)
-          stop_myself(ac)
-          sleep
-        ensure
-          self.str += "d"
-          result.yield
-        end
+        sleepy(result)
+      end
+
+      action def sleepy(result, ac)
+        stop_myself(ac)
+        sleep
+      ensure
+        self.str += "d"
+        result.yield
       end
 
       async_call def stop_myself(ac)
@@ -394,9 +410,10 @@ class EventboxActionTest < Minitest::Test
     eb = Class.new(ec) do
       yield_call def go(result)
         @str = "a"
-        action result, def action_thread(result)
-          result.yield str
-        end
+        action_thread(result)
+      end
+      action def action_thread(result)
+        result.yield str
       end
     end.new
 
@@ -407,9 +424,10 @@ class EventboxActionTest < Minitest::Test
     ec = Class.new(Eventbox) do
       yield_call def go(result)
         @str = "a"
-        action result, def action_thread(result)
-          result.yield str
-        end
+        action_thread(result)
+      end
+      action def action_thread(result)
+        result.yield str
       end
     end
     eb = Class.new(ec) do
@@ -421,9 +439,11 @@ class EventboxActionTest < Minitest::Test
 
   class TestInitWithPendingAction < Eventbox
     yield_call def init(result)
-      action result, def suspended_thread(result)
-        wait_forever(result)
-      end
+      suspended_thread(result)
+    end
+
+    action def suspended_thread(result)
+      wait_forever(result)
     end
 
     yield_call def wait_forever(init_result, result)
@@ -456,4 +476,29 @@ class EventboxActionTest < Minitest::Test
     assert_equal c1, c3, "The new thread should be removed"
   end
 
+  def test_several_instances_running_actions_dont_interfere
+    ec = Class.new(Eventbox) do
+      yield_call def init(result)
+        @count = 0
+        100.times do
+          adder(result)
+        end
+      end
+
+      async_call def add(result)
+        result.yield if (@count+=1) == 100
+      end
+
+      action def adder(result)
+        sleep 0.001
+        add(result)
+      end
+    end
+
+    10.times.map do
+      Thread.new do
+        ec.new
+      end
+    end.each(&:join)
+  end
 end

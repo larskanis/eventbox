@@ -103,17 +103,19 @@ class ThreadPool < Eventbox
     @jobless = []             # Initialize the list of jobless action threads
 
     pool_size.times do        # Start up x action threads
-      action def pool_thread  # The action call returns immediately, but spawns a new thread
-        while bl=next_job     # Each new thread waits for a job to be pooled
-          bl.yield            # Execute the external job enqueued by `pool`
-        end
-      end
+      pool_thread
+    end
+  end
+
+  private action def pool_thread  # The action call returns immediately, but spawns a new thread
+    while bl=next_job     # Each new thread waits for a job to be pooled
+      bl.yield            # Execute the external job enqueued by `pool`
     end
   end
 
   # Get the next job or wait for one
-  # The method is protected, so that it's accessible in the pool_thread action but not externally
-  protected yield_call def next_job(result)
+  # The method is private, so that it's accessible in the pool_thread action but not externally
+  private yield_call def next_job(result)
     if @que.empty?            # No job pooled?
       @jobless << result      # Enqueue the action thread to the list of jobless workers
     else                      # Already pooled jobs?

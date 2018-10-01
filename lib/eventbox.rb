@@ -64,10 +64,6 @@ class Eventbox
       raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
     end
 
-    # Prepare list of prohibited method names for action
-    prmeths = private_methods + protected_methods + public_methods - obj.private_methods - obj.protected_methods - obj.public_methods
-    @method_map = prmeths.each.with_object({}) { |name, hash| hash[name] = true }
-
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
     @event_loop = EventLoop.new(threadpool, self.class.eventbox_options[:guard_time])
@@ -209,23 +205,18 @@ class Eventbox
   #
   # Attention: Be careful with read-modify-write operations - they are *not* atomic!
   #
-  # This will lose counter increments:
+  # This will lose counter increments, since `counter` is incremented in a non-atomic manner:
   #   attr_accessor :counter
   #   async_call def start
-  #     10.times do
-  #       action def do_something
-  #         self.counter += 1
-  #       end
-  #     end
+  #     10.times { do_something }
+  #   end
+  #   action def do_something
+  #     self.counter += 1
   #   end
   #
-  # Instead do increments in one method call like so:
-  #   async_call def start
-  #     10.times do
-  #       action def do_something
-  #         increment 1
-  #       end
-  #     end
+  # Instead do increments within one method call like so:
+  #   action def do_something
+  #     increment 1
   #   end
   #   async_call def increment(by)
   #     @counter += by
@@ -291,58 +282,42 @@ class Eventbox
 
   # Run a block as asynchronous action.
   #
-  # The action is executed through the threadpool given to {with_options}.
+  # The call to the action method returns immediately with an {Action} object.
+  # By default each call to an action method spawns a new thread which executes the code of the action definition.
+  # Alternatively a threadpool can be assigned by {with_options}.
   #
   # All method arguments are passed through the ArgumentSanitizer.
   #
   # Actions can return state changes or objects to the event loop by calls to methods created by #async_call, #sync_call or #yield_call or through calling async_proc, sync_proc or yield_proc objects.
-  # To avoid unsafe shared objects, the action block doesn't have access to local variables, instance variables or instance methods other then methods defined per #async_call, #sync_call or #yield_call .
+  # To avoid unsafe shared objects, the action block doesn't have access to local variables or instance variables.
   #
-  # An action can be started as named action like:
-  #   action param1, param2, def do_something(param1, param2)
-  #     sleep 1
-  #   end
-  #
-  # or as an anonnymous action (deprecated) like:
-  #   action(param1, param2) do |o|
-  #     def o.o(param1, param2)
-  #       sleep 1
-  #     end
-  #   end
-  #
-  # {action} returns an Action object.
-  # It can be used to interrupt the program execution by an exception.
+  # The {Action} object can be used to interrupt the program execution by an exception.
   # See {Eventbox::Action} for further information.
-  # If the action method accepts one more argument than given to the {action} call, it is set to corresponding {Action} instance:
-  #   action param1, def do_something(param1, action)
+  # If the action method accepts one more argument than given to the action call, it is set to corresponding {Action} instance:
+  #   async_call def init
+  #     do_something("value1")
+  #   end
+  #   action def do_something(param1, action)
   #     # pass `action' to some internal or external method,
   #     # so that it's able to send a signal per Action#raise
   #   end
   #
-  def action(*args)
-    raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
+  def self.action(name, &block)
+    unbound_method = nil
+    with_block_or_def(name, block) do |*args, &cb|
+      raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
 
-    sandbox = self.class.allocate
-    sandbox.instance_variable_set(:@event_loop, @event_loop)
-    sandbox.instance_variable_set(:@eventbox, WeakRef.new(self))
-    if block_given?
-      method_name = yield(sandbox)
-      meth = sandbox.method(method_name)
-    else
-      method_name = args.pop
-      # Verify that the method name didn't overwrite an existing method
-      if @method_map[method_name]
-        meth = method(method_name)
-        raise InvalidAccess, "action method name `#{method_name}' at #{meth.source_location.join(":")} conflicts with instance methods"
-      end
+      sandbox = self.class.allocate
+      sandbox.instance_variable_set(:@event_loop, @event_loop)
+      sandbox.instance_variable_set(:@eventbox, WeakRef.new(self))
+      meth = unbound_method.bind(sandbox)
 
-      meth = self.class.instance_method(method_name).bind(sandbox)
-      meth.owner.send(:remove_method, method_name)
+      args = sanity_before_queue(args)
+      # Start a new action thread and return an Action instance
+      @event_loop._start_action(meth, name, args)
     end
-
-    args = sanity_before_queue(args)
-    # Start a new action thread and return an Action instance
-    @event_loop._start_action(meth, args)
+    unbound_method = self.instance_method("__#{name}__")
+    name
   end
 
   # An Action object is returned by {Eventbox#action} and optionally passed as last argument. It can be used to interrupt the program execution by an exception.
@@ -360,14 +335,16 @@ class Eventbox
   #   end
   #
   #   async_call def init
-  #     a = action def sleepy
-  #       Thread.handle_interrupt(MySignal => :on_blocking) do
-  #         sleep
-  #       end
-  #     rescue MySignal
-  #       puts "well-rested"
-  #     end
+  #     a = start_sleep
   #     a.raise(MySignal)
+  #   end
+  #
+  #   action def start_sleep
+  #     Thread.handle_interrupt(MySignal => :on_blocking) do
+  #       sleep
+  #     end
+  #   rescue MySignal
+  #     puts "well-rested"
   #   end
   class Action
     include ArgumentSanitizer

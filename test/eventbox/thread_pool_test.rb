@@ -1,6 +1,6 @@
 require_relative "../test_helper"
 
-class EventboxActionTest < Minitest::Test
+class EventboxThreadBoxTest < Minitest::Test
   def test_number_of_threads
     tp = Eventbox::ThreadPool.new(3)
 

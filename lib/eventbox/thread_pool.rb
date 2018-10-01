@@ -28,18 +28,20 @@ class Eventbox
       @run_gc_when_busy = run_gc_when_busy
 
       pool_size.times do |aid|
-        a = action aid, def pool_thread(aid)
-          while bl=next_job(aid)
-            begin
-              Thread.handle_interrupt(AbortAction => :on_blocking) do
-                bl.yield
-              end
-            rescue AbortAction
-            end
-          end
-        end
+        a = pool_thread(aid)
 
         @actions[aid] = a
+      end
+    end
+
+    action def pool_thread(aid)
+      while bl=next_job(aid)
+        begin
+          Thread.handle_interrupt(AbortAction => :on_blocking) do
+            bl.yield
+          end
+        rescue AbortAction
+        end
       end
     end
 

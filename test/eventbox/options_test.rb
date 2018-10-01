@@ -21,11 +21,13 @@ class EventboxOptionsTest < Minitest::Test
       yield_call def init(result)
         @ids = []
         100.times do
-          action result, def adder(result)
-            sleep 0.001
-            add(Thread.current.object_id, result)
-          end
+          adder(result)
         end
+      end
+
+      action def adder(result)
+        sleep 0.001
+        add(Thread.current.object_id, result)
       end
 
       async_call def add(id, result)

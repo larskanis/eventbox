@@ -233,7 +233,7 @@ class Eventbox
       end
     end
 
-    def _start_action(meth, args)
+    def _start_action(meth, name, args)
       qu = Queue.new
 
       new_thread = Thread.handle_interrupt(Exception => :never) do
@@ -255,7 +255,7 @@ class Eventbox
         end
       end
 
-      a = Action.new(meth.name, new_thread, self)
+      a = Action.new(name, new_thread, self)
       # Enqueue the action twice (for call and for finish)
       qu << a << a
 
