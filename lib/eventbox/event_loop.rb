@@ -68,11 +68,11 @@ class Eventbox
         yield
       ensure
         diff_time = Time.now - start_time
-        @guard_time_proc&.call(diff_time, name)
         @latest_answer_queue = nil
         @latest_call_name = nil
         @ctrl_thread = nil
         @mutex.unlock
+        @guard_time_proc&.call(diff_time, name)
       end
     end
 
