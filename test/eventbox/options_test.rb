@@ -70,13 +70,13 @@ class EventboxOptionsTest < Minitest::Test
     calls = []
     assert_output("", ""){ eb.slow }
     assert_equal 1, calls.size
-    assert_operator 0.01, :<, calls[0][0]
+    assert_operator 0.01, :<=, calls[0][0]
     assert_equal :slow, calls[0][1]
 
     calls = []
     assert_output("", ""){ eb.fast }
     assert_equal 1, calls.size
-    assert_operator 0.00, :<, calls[0][0]
+    assert_operator 0.00, :<=, calls[0][0]
     assert_equal :fast, calls[0][1]
   end
 end
