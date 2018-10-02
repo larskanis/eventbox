@@ -129,6 +129,7 @@ class Eventbox
         cb = sanity_before_queue(cb, name)
         @event_loop.async_call(eventbox, name, args, cb)
       end
+      self
     end
     unbound_method = self.instance_method("__#{name}__")
     name

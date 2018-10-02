@@ -158,6 +158,18 @@ class EventboxCallTest < Minitest::Test
     assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
+  def test_async_returns_self
+    eb = Class.new(Eventbox) do
+      sync_call def syn
+        asyn
+      end
+      async_call def asyn
+      end
+    end.new
+
+    assert_equal eb, eb.syn, "returns self by internal calls"
+    assert_equal eb, eb.asyn, "returns self by external calls"
+  end
 
   def test_external_object_sync_call
     fc = Class.new(Eventbox) do
