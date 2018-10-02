@@ -126,7 +126,7 @@ class Eventbox
       end
     end
 
-    # Anonymous version of async_call
+    # Called when an external proc finished
     def external_proc_result(cbresult, res)
       with_call_frame(ExternalProc, nil) do
         res = sanity_after_queue(res)
