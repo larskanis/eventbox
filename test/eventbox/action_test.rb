@@ -480,13 +480,13 @@ class EventboxActionTest < Minitest::Test
     ec = Class.new(Eventbox) do
       yield_call def init(result)
         @count = 0
-        100.times do
+        10.times do
           adder(result)
         end
       end
 
       async_call def add(result)
-        result.yield if (@count+=1) == 100
+        result.yield if (@count+=1) == 10
       end
 
       action def adder(result)
