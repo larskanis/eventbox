@@ -150,9 +150,9 @@ class Eventbox
       attr_writer name
     end
 
-    # Run a block as asynchronous action.
+    # Define a method for asynchronous execution.
     #
-    # The call to the action method returns immediately with an {Action} object.
+    # The call to the action method returns immediately after starting a new action and returns an {Action} object.
     # By default each call to an action method spawns a new thread which executes the code of the action definition.
     # Alternatively a threadpool can be assigned by {with_options}.
     #
