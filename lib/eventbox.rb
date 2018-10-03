@@ -7,6 +7,7 @@ require "eventbox/object_registry"
 class Eventbox
   autoload :VERSION, "eventbox/version"
   autoload :ThreadPool, "eventbox/thread_pool"
+  autoload :Timers, "eventbox/timers"
 
   extend Boxable
   include ArgumentSanitizer
