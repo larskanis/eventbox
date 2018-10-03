@@ -1,4 +1,22 @@
 class Eventbox
+
+  # Extend modules with Eventbox method creation functions
+  #
+  # This works like so:
+  #
+  #   module MyHelpers
+  #     extend Eventbox::Boxable
+  #     sync_call def hello
+  #       puts "hello!"
+  #     end
+  #   end
+  #
+  #   class MyBox < Eventbox
+  #     include MyHelpers
+  #   end
+  #
+  #   MyBox.new.hello   # prints "hello!"
+  #
   module Boxable
     def with_block_or_def(name, block, &cexec)
       if block
