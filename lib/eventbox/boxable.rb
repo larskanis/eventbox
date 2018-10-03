@@ -18,7 +18,7 @@ class Eventbox
   #   MyBox.new.hello   # prints "hello!"
   #
   module Boxable
-    def with_block_or_def(name, block, &cexec)
+    private def with_block_or_def(name, block, &cexec)
       if block
         define_method(name, &cexec)
         private define_method("__#{name}__", &block)
