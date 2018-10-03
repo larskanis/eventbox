@@ -403,6 +403,31 @@ class EventboxActionTest < Minitest::Test
     assert_equal "abcd", eb.str
   end
 
+  def test_action_current_p
+    eb = Class.new(Eventbox) do
+      yield_call def outside(result)
+        a = sleepy
+        result.yield a.current?
+        a.abort
+      end
+
+      action def sleepy
+        sleep
+      end
+
+      yield_call def inside(result)
+        retu(result)
+      end
+
+      action def retu(result, a)
+        result.yield a.current?
+      end
+    end.new
+
+    refute eb.outside
+    assert eb.inside
+  end
+
   def test_action_can_call_methods_from_base_class
     ec = Class.new(Eventbox) do
       attr_reader :str

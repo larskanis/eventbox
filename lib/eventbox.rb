@@ -209,5 +209,10 @@ class Eventbox
     def abort
       @thread.raise AbortAction
     end
+
+    # Belongs the current thread to this action.
+    def current?
+      @thread == Thread.current
+    end
   end
 end
