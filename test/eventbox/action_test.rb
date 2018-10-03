@@ -356,11 +356,11 @@ class EventboxActionTest < Minitest::Test
     assert_kind_of TestActionRaise::Stop, eb.stop
   end
 
-  def test_action_raise_abort_in_init
+  def test_action_abort_in_init
     eb = Class.new(Eventbox) do
       yield_call def init(str, result)
         a = sleepy(str+"b", result)
-        a.raise(Eventbox::AbortAction)
+        a.abort
       end
 
       action def sleepy(str, result)
@@ -377,7 +377,7 @@ class EventboxActionTest < Minitest::Test
     assert_equal "abcd", eb.str
   end
 
-  def test_action_raise_abort_in_init_with_action_param
+  def test_action_abort_in_init_with_action_param
     eb = Class.new(Eventbox) do
       yield_call def init(str, result)
         @str = str+"b"
@@ -394,7 +394,7 @@ class EventboxActionTest < Minitest::Test
 
       async_call def stop_myself(ac)
         @str << "c"
-        ac.raise(Eventbox::AbortAction)
+        ac.abort
       end
 
       attr_accessor :str
