@@ -196,8 +196,13 @@ class Eventbox
     # The signal must be kind of Exception.
     # See {Action} about asynchronous delivery of signals.
     #
-    # If the action has already finished, this method does nothing.
+    # This method does nothing if the action is already finished.
     def raise(*args)
+      # ignore raise, if sent from the action thread
+      if AbortAction === args[0] || (Module === args[0] && args[0].ancestors.include?(AbortAction))
+        ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
+      end
+
       if @event_loop.internal_thread?(@thread)
         args = sanity_before_queue(args)
         args = sanity_after_queue(args, @thread)

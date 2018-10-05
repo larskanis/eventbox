@@ -403,6 +403,28 @@ class EventboxActionTest < Minitest::Test
     assert_equal "abcd", eb.str
   end
 
+  def test_action_abort_by_raise_is_denied
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        a = sleepy
+        a.raise(Eventbox::AbortAction)
+      end
+
+      sync_call def go2
+        a = sleepy
+        a.raise(Eventbox::AbortAction.new("dummy"))
+      end
+
+      action def sleepy
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess){ eb.go }
+    assert_match(/AbortAction is not allowed/, err.to_s)
+    err = assert_raises(Eventbox::InvalidAccess){ eb.go2 }
+    assert_match(/AbortAction is not allowed/, err.to_s)
+  end
+
   def test_action_current_p
     eb = Class.new(Eventbox) do
       yield_call def outside(result)
