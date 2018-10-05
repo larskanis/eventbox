@@ -155,6 +155,8 @@ class Eventbox
           end
         end
       end
+      # the method result is irrelevant, but sync_call is necessary to yield the timer blocks
+      nil
     end
   end
 end
