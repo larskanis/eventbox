@@ -212,7 +212,7 @@ class Eventbox
 
     # Belongs the current thread to this action.
     def current?
-      @thread == Thread.current
+      @thread.respond_to?(:current?) ? @thread.current? : (@thread == Thread.current)
     end
   end
 end

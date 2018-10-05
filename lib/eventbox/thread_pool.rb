@@ -14,6 +14,11 @@ class Eventbox
         args[0] = AbortAction if args[0] == Eventbox::AbortAction
         @pool.raise(@rid, *args)
       end
+
+      # Belongs the current thread to this action.
+      sync_call def current?
+        @pool.current?(@rid)
+      end
     end
 
     Request = Struct.new :block, :rid, :signals
@@ -88,6 +93,14 @@ class Eventbox
       elsif req=@requests.find{|r| r.rid == rid }
         # The task is still enqueued -> add the signal to the request
         req.signals << args
+      end
+    end
+
+    sync_call def current?(rid)
+      if run=@running.find{|r| r.rid == rid }
+        run.action.current?
+      else
+        false
       end
     end
   end
