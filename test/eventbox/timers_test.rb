@@ -1,6 +1,6 @@
 require_relative "../test_helper"
 
-class EventboxTimersTest < Minitest::Test
+class EventboxTimerTest < Minitest::Test
   def diff_time
     st = Time.now
     yield
@@ -9,10 +9,10 @@ class EventboxTimersTest < Minitest::Test
 
   def test_delay_init
     eb = Class.new(Eventbox) do
-      include Eventbox::Timers
+      include Eventbox::Timer
       yield_call def init(interval, result)
         super()
-        timers_after(interval) do
+        timer_after(interval) do
           result.yield
         end
       end
@@ -24,23 +24,23 @@ class EventboxTimersTest < Minitest::Test
 
   def test_after
     eb = Class.new(Eventbox) do
-      include Eventbox::Timers
+      include Eventbox::Timer
 
       yield_call def run(result)
         alerts = []
-        timers_after(0.3) do
+        timer_after(0.3) do
           alerts << 3
         end
-        timers_after(0.1) do
+        timer_after(0.1) do
           alerts << 1
-          timers_after(0.05) do
+          timer_after(0.05) do
             alerts << 0.5
           end
         end
-        timers_after(0.2) do
+        timer_after(0.2) do
           alerts << 2
         end
-        timers_after(0.4) do
+        timer_after(0.4) do
           result.yield alerts
         end
       end
@@ -53,23 +53,23 @@ class EventboxTimersTest < Minitest::Test
 
   def test_every
     eb = Class.new(Eventbox) do
-      include Eventbox::Timers
+      include Eventbox::Timer
 
       yield_call def run(result)
         alerts = []
-        timers_after(0.3) do
+        timer_after(0.3) do
           alerts << 3
         end
-        timers_every(0.1) do
+        timer_every(0.1) do
           alerts << 1
-          timers_after(0.05) do
+          timer_after(0.05) do
             alerts << 0.5
           end
         end
-        timers_after(0.2) do
+        timer_after(0.2) do
           alerts << 2
         end
-        timers_after(0.4) do
+        timer_after(0.4) do
           result.yield alerts
         end
       end
@@ -82,24 +82,24 @@ class EventboxTimersTest < Minitest::Test
 
   def test_cancel
     eb = Class.new(Eventbox) do
-      include Eventbox::Timers
+      include Eventbox::Timer
 
       yield_call def run(result)
         alerts = []
-        timers_after(0.3) do
+        timer_after(0.3) do
           alerts << 3
         end
-        a1 = timers_every(0.1) do
+        a1 = timer_every(0.1) do
           alerts << 1
-          timers_after(0.05) do
+          timer_after(0.05) do
             alerts << 0.5
           end
         end
-        timers_after(0.22) do
+        timer_after(0.22) do
           alerts << 2.2
-          timers_cancel(a1)
+          timer_cancel(a1)
         end
-        timers_after(0.4) do
+        timer_after(0.4) do
           result.yield alerts
         end
       end
