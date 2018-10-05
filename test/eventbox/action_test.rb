@@ -359,8 +359,10 @@ class EventboxActionTest < Minitest::Test
   def test_action_abort_in_init
     eb = Class.new(Eventbox) do
       yield_call def init(str, result)
-        a = sleepy(str+"b", result)
+        @str = str+"b"
+        a = sleepy(@str, result)
         a.abort
+        result.yield
       end
 
       action def sleepy(str, result)
@@ -368,13 +370,12 @@ class EventboxActionTest < Minitest::Test
         sleep
       ensure
         self.str = str+"d"
-        result.yield
       end
 
       attr_accessor :str
     end.new("a")
 
-    assert_equal "abcd", eb.str
+    assert_operator(["ab", "abcd"], :include?, eb.str)
   end
 
   def test_action_abort_in_init_with_action_param

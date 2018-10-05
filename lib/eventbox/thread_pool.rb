@@ -42,7 +42,7 @@ class Eventbox
     action def pool_thread(aid)
       while bl=next_job(aid)
         begin
-          Thread.handle_interrupt(AbortAction => :on_blocking) do
+          Thread.handle_interrupt(AbortAction => :immediate) do
             bl.yield
           end
         rescue AbortAction

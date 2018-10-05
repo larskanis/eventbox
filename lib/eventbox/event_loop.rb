@@ -239,7 +239,7 @@ class Eventbox
       new_thread = Thread.handle_interrupt(Exception => :never) do
         @threadpool.new do
           begin
-            Thread.handle_interrupt(AbortAction => :on_blocking) do
+            Thread.handle_interrupt(AbortAction => :immediate) do
               args = sanity_after_queue(args)
 
               if meth.arity == args.length
