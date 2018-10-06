@@ -42,3 +42,8 @@ def with_report_on_exception(enabled)
     yield
   end
 end
+
+def eval_file(local_file)
+  fn = File.expand_path(local_file, __dir__)
+  class_eval(File.read(fn, encoding: "UTF-8"), fn)
+end
