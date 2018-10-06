@@ -81,9 +81,9 @@ class Eventbox
           interval = timer_next_timestamp&.-(Time.now)
           Thread.handle_interrupt(Reload => :on_blocking) do
             if interval.nil?
-              sleep
+              Kernel.sleep
             elsif interval > 0.0
-              sleep(interval)
+              Kernel.sleep(interval)
             end
           end
         rescue Reload
