@@ -141,4 +141,27 @@ class EventboxTimerTest < Minitest::Test
     end
     eb.shutdown!
   end
+
+  def test_cancel_with_retrigger
+    eb = Class.new(Eventbox) do
+      include Eventbox::Timer
+
+      yield_call def run(result)
+        alerts = []
+        a1 = timer_after(2) do
+          alerts << 2
+        end
+        timer_cancel(a1)
+        timer_after(8) do
+          result.yield alerts
+        end
+      end
+    end.new
+
+    with_fake_time do
+      alerts = eb.run
+      assert_equal [], alerts
+    end
+    eb.shutdown!
+  end
 end
