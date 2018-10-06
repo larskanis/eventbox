@@ -75,7 +75,10 @@ class Eventbox
         @requests << Request.new(block, @rid, [])
 
         # Try to release some actions by the GC
-        GC.start if @run_gc_when_busy
+        if @run_gc_when_busy
+          @run_gc_when_busy = false # Start only one GC run
+          gc_start
+        end
       else
         # Immediately start the block
         aid, result = @jobless.shift
@@ -102,6 +105,16 @@ class Eventbox
       else
         false
       end
+    end
+
+    action def gc_start
+      GC.start
+    ensure
+      gc_finished
+    end
+
+    async_call def gc_finished
+      @run_gc_when_busy = true
     end
   end
 end
