@@ -50,26 +50,33 @@ class Eventbox
   #
   # All arguments are passed to the init() method when defined.
   def initialize(*args, &block)
-    threadpool = self.class.eventbox_options[:threadpool]
+    options = self.class.eventbox_options
 
     # TODO Better hide instance variables
     @eventbox = self
 
-    # Verify that all public methods are properly wrapped
-    obj = Object.new
-    meths = methods - obj.methods - [:__getobj__, :shutdown!, :mutable_object]
-    prmeths = private_methods - obj.private_methods
-    prohib = meths.find do |name|
-      !prmeths.include?(:"__#{name}__")
-    end
-    if prohib
-      meth = method(prohib)
-      raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
+    # Verify that all public methods are properly wrapped and no unsafe methods exist
+    # This check is done at the first instanciation only and doesn't slow down subsequently.
+    # Since test and set operations aren't atomic, it can happen that the check is executed several times.
+    # This is considered less harmful than slowing all instanciations down by a mutex.
+    unless self.class.instance_variable_defined?(:@eventbox_methods_checked)
+      self.class.instance_variable_set(:@eventbox_methods_checked, true)
+
+      obj = Object.new
+      meths = methods - obj.methods - [:__getobj__, :shutdown!, :mutable_object]
+      prmeths = private_methods - obj.private_methods
+      prohib = meths.find do |name|
+        !prmeths.include?(:"__#{name}__")
+      end
+      if prohib
+        meth = method(prohib)
+        raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
+      end
     end
 
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
-    @event_loop = EventLoop.new(threadpool, self.class.eventbox_options[:guard_time])
+    @event_loop = EventLoop.new(options[:threadpool], options[:guard_time])
     ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
 
     init(*args, &block)
