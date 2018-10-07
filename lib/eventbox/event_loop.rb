@@ -21,7 +21,8 @@ class Eventbox
         when Numeric
           guard_time and proc do |dt, name|
             if dt > guard_time
-              warn "guard time exceeded: #{"%2.3f" % dt} sec (limit is #{guard_time}) in `#{name}' - please move blocking tasks to actions"
+              ecaller = caller.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) }
+              warn "guard time exceeded: #{"%2.3f" % dt} sec (limit is #{guard_time}) in `#{name}' called from `#{ecaller}' - please move blocking tasks to actions"
             end
           end
         when Proc
