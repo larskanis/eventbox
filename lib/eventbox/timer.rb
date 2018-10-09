@@ -30,6 +30,8 @@ class Eventbox
   module Timer
     class Reload < RuntimeError
     end
+    class InternalError < RuntimeError
+    end
 
     class Alarm
       include Comparable
@@ -125,6 +127,7 @@ class Eventbox
         if i == @timer_alarms.size
           @timer_action.raise(Reload) unless @timer_action.current?
         end
+        timer_check_integrity
       end
     end
 
@@ -136,6 +139,14 @@ class Eventbox
       else
         @timer_alarms << alarm
         @timer_action.raise(Reload) unless @timer_action.current?
+      end
+      timer_check_integrity
+    end
+
+    private def timer_check_integrity
+      @timer_alarms.inject(nil) do |max, a|
+        raise InternalError, "alarms are not ordered: #{@timer_alarms.inspect}" if max && max<a
+        a
       end
     end
 
@@ -154,6 +165,7 @@ class Eventbox
             timer_add_alarm(a)
           end
         end
+        timer_check_integrity
       end
       # the method result is irrelevant, but sync_call is necessary to yield the timer blocks
       nil
