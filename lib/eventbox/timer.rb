@@ -152,18 +152,15 @@ class Eventbox
 
     # @private
     private sync_call def timer_next_timestamp
-      @timer_alarms[-1]&.timestamp
+      @timer_alarms.last&.timestamp
     end
 
     # @private
     private sync_call def timer_fire(now=Time.now)
-      i = @timer_alarms.bsearch_index {|t| t <= now }
-      if i
-        due_alarms = @timer_alarms.slice!(i .. -1)
-        due_alarms.reverse_each do |a|
-          if a.fire_then_repeat?(now)
-            timer_add_alarm(a)
-          end
+      while @timer_alarms.last&.<=(now)
+        a = @timer_alarms.pop
+        if a.fire_then_repeat?(now)
+          timer_add_alarm(a)
         end
         timer_check_integrity
       end
