@@ -240,7 +240,7 @@ class Eventbox
       new_thread = Thread.handle_interrupt(Exception => :never) do
         @threadpool.new do
           begin
-            Thread.handle_interrupt(AbortAction => :immediate) do
+            Thread.handle_interrupt(AbortAction => :on_blocking) do
               args = sanity_after_queue(args)
 
               if meth.arity == args.length
@@ -250,6 +250,12 @@ class Eventbox
               end
             end
           rescue AbortAction
+            # Do nothing, just exit the action
+          rescue WeakRef::RefError
+            # It can happen that the GC already swept the Eventbox instance, before some instance action is in a blocking state.
+            # In this case access to the Eventbox instance raises a RefError.
+            # Since it's now impossible to execute the action up to a blocking state, abort the action prematurely.
+            raise unless @shutdown
           ensure
             thread_finished(qu.deq)
           end

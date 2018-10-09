@@ -355,10 +355,8 @@ end
 def test_action_abort_in_init
   eb = Class.new(Eventbox) do
     yield_call def init(str, result)
-      @str = str+"b"
-      a = sleepy(@str, result)
+      a = sleepy(str+"b", result)
       a.abort
-      result.yield
     end
 
     action def sleepy(str, result)
@@ -366,12 +364,13 @@ def test_action_abort_in_init
       sleep
     ensure
       self.str = str+"d"
+      result.yield
     end
 
     attr_accessor :str
   end.new("a")
 
-  assert_operator(["ab", "abcd"], :include?, eb.str)
+  assert_equal "abcd", eb.str
 end
 
 def test_action_abort_in_init_with_action_param

@@ -20,6 +20,7 @@ class EventboxTimerTest < Minitest::Test
     kernel_sleep = proc do |sec=nil|
       if sec
         time += sec
+        sleep 0.001
       else
         sleep 10
         raise "sleep not interrupted"
