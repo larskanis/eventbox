@@ -4,13 +4,19 @@ class Eventbox
   # All call arguments are passed through as either copies or wrapped objects.
   # Certain object types are passed through unchanged.
   #
+  # Objects which are passed through unchanged are:
+  # * Eventbox, Action and Module objects
+  # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
+  #
+  # If the object has been marked as {mutable_object}, it is wrapped as {InternalObject} or {ExternalObject}.
+  # In all other cases the following rules apply:
   # * If the object is mashalable, it is passed as a deep copy through Marshal.dump and Marshal.load .
-  #   An object which faild to marshal is wrapped as {ExternalObject}.
+  # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
+  # * If the object can't be marshaled or dissected, it is wrapped as {InternalObject} or {ExternalObject}.
   # * Proc objects passed from internal to external are wrapped as {InternalObject}.
   #   They are unwrapped when passed back to internal.
   # * Proc objects passed from external to internal are wrapped as {ExternalProc}.
   #   They are unwrapped when passed back to external.
-  # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc} are passed through without change.
   #
   # ArgumentSanitizer expects the method `event_loop' to return the related EventLoop instance.
   module ArgumentSanitizer
@@ -18,6 +24,98 @@ class Eventbox
 
     def return_args(args)
       args.length <= 1 ? args.first : args
+    end
+
+    def dissect_instance_variables(arg)
+      # Separate the instance variables from the object
+      ivns = arg.instance_variables
+      ivvs = ivns.map do |ivn|
+        arg.instance_variable_get(ivn)
+      end
+
+      # Temporary set all instance variables to nil
+      ivns.each do |ivn|
+        arg.instance_variable_set(ivn, nil)
+      end
+
+      # Copy the object
+      arg2 = yield(arg)
+
+      # Restore the original object
+      ivns.each_with_index do |ivn, ivni|
+        arg.instance_variable_set(ivn, ivvs[ivni])
+      end
+
+      # sanitize instance variables independently and write them to the copied object
+      ivns.each_with_index do |ivn, ivni|
+        ivv = sanity_before_queue2(ivvs[ivni], ivn)
+        arg2.instance_variable_set(ivn, ivv)
+      end
+
+      arg2
+    end
+
+    def dissect_struct_members(arg)
+      ms = arg.members
+      vs = arg.values
+
+      ms.each do |m|
+        arg[m] = nil
+      end
+
+      arg2 = yield(arg)
+
+      ms.each_with_index do |m, i|
+        arg[m] = vs[i]
+      end
+
+      ms.each_with_index do |m, i|
+        v2 = sanity_before_queue2(vs[i], m)
+        arg2[m] = v2
+      end
+
+      arg2
+    end
+
+    def dissect_hash_values(arg)
+      h = arg.dup
+
+      h.each_key do |k|
+        arg[k] = nil
+      end
+
+      arg2 = yield(arg)
+
+      h.each do |k, v|
+        arg[k] = v
+      end
+
+      h.each do |k, v|
+        arg2[k] = sanity_before_queue2(v, k)
+      end
+
+      arg2
+    end
+
+    def dissect_array_values(arg, name)
+      vs = arg.dup
+
+      vs.each_index do |i|
+        arg[i] = nil
+      end
+
+      arg2 = yield(arg)
+
+      vs.each_index do |i|
+        arg[i] = vs[i]
+      end
+
+      vs.each_with_index do |v, i|
+        v2 = sanity_before_queue2(v, name)
+        arg2[i] = v2
+      end
+
+      arg2
     end
 
     def sanity_before_queue2(arg, name)
@@ -42,8 +140,42 @@ class Eventbox
           begin
             dumped = Marshal.dump(arg)
           rescue TypeError
-            # Object not copyable -> wrap object as internal or external object
-            sanity_before_queue2(mutable_object(arg), name)
+
+            # Try to separate internal data from the object to sanitize it independently
+            begin
+              case arg
+              when Array
+                dissect_array_values(arg, name) do |arg2|
+                  dissect_instance_variables(arg2) do |arg3|
+                    Marshal.load(Marshal.dump(arg3))
+                  end
+                end
+
+              when Hash
+                dissect_hash_values(arg) do |arg2|
+                  dissect_instance_variables(arg2) do |arg3|
+                    Marshal.load(Marshal.dump(arg3))
+                  end
+                end
+
+              when Struct
+                dissect_struct_members(arg) do |arg2|
+                  dissect_instance_variables(arg2) do |arg3|
+                    Marshal.load(Marshal.dump(arg3))
+                  end
+                end
+
+              else
+                dissect_instance_variables(arg) do |empty_arg|
+                  # Retry to dump the now empty object
+                  Marshal.load(Marshal.dump(empty_arg))
+                end
+              end
+            rescue TypeError
+              # Object not copyable -> wrap object as internal or external object
+              sanity_before_queue2(mutable_object(arg), name)
+            end
+
           else
             Marshal.load(dumped)
           end

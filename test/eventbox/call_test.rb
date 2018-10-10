@@ -44,7 +44,7 @@ class EventboxCallTest < Minitest::Test
 
   def test_init_with_def
     pr = proc {}
-    eb = TestInitWithDef.new("123", pr, IO.pipe)
+    eb = TestInitWithDef.new("123", pr, IO.pipe.first)
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
@@ -85,7 +85,7 @@ class EventboxCallTest < Minitest::Test
         @values << Thread.current.object_id
         result.yield
       end
-    end.new(123, IO.pipe)
+    end.new(123, IO.pipe.first)
 
     assert_equal Eventbox::ExternalObject, eb.values[1], "result is passed to superclass"
     assert_equal eb.thread, eb.values[3], "superclass was called"
@@ -137,7 +137,7 @@ class EventboxCallTest < Minitest::Test
 
   def test_init_with_block
     pr = proc {}
-    eb = TestInitWithBlock.new("123", pr, IO.pipe)
+    eb = TestInitWithBlock.new("123", pr, IO.pipe.first)
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
@@ -152,7 +152,7 @@ class EventboxCallTest < Minitest::Test
         super(num, pr2, pi2) # block form requres explicit parameters
         @values << Thread.current.object_id
       end
-    end.new(123, pr, IO.pipe)
+    end.new(123, pr, IO.pipe.first)
 
     assert_equal eb.thread, eb.values[3], "superclass was called"
     assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
