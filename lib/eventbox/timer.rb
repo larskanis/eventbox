@@ -80,8 +80,10 @@ class Eventbox
     private action def timer_start_worker
       loop do
         begin
+          $calls << [Thread.current.object_id.*(2).to_s(16), :next, Time.now]
           interval = timer_next_timestamp&.-(Time.now)
           Thread.handle_interrupt(Reload => :on_blocking) do
+            $calls << [Thread.current.object_id.*(2).to_s(16), :interval, interval]
             if interval.nil?
               Kernel.sleep
             elsif interval > 0.0
@@ -89,6 +91,7 @@ class Eventbox
             end
           end
         rescue Reload
+          $calls << [Thread.current.object_id.*(2).to_s(16), :reload]
         else
           timer_fire
         end
@@ -125,7 +128,10 @@ class Eventbox
       if i
         @timer_alarms.slice!(i)
         if i == @timer_alarms.size
-          @timer_action.raise(Reload) unless @timer_action.current?
+          unless @timer_action.current?
+            $calls << [Thread.current.object_id.*(2).to_s(16), :raise]
+            @timer_action.raise(Reload)
+          end
         end
         timer_check_integrity
       end
@@ -138,7 +144,10 @@ class Eventbox
         @timer_alarms[i, 0] = alarm
       else
         @timer_alarms << alarm
-        @timer_action.raise(Reload) unless @timer_action.current?
+        unless @timer_action.current?
+          $calls << [Thread.current.object_id.*(2).to_s(16), :raise, @timer_action.instance_variable_get(:@thread).object_id.*(2).to_s(16)]
+          @timer_action.raise(Reload)
+        end
       end
       timer_check_integrity
     end
@@ -157,6 +166,7 @@ class Eventbox
 
     # @private
     private sync_call def timer_fire(now=Time.now)
+      $calls << [Thread.current.object_id.*(2).to_s(16), :fire, now]
       while @timer_alarms.last&.<=(now)
         a = @timer_alarms.pop
         if a.fire_then_repeat?(now)

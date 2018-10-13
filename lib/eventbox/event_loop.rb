@@ -8,6 +8,42 @@ class Eventbox
   class EventLoop
     include ArgumentSanitizer
 
+    class MyMutex
+      def initialize
+        @mutex = Mutex.new
+        @waiters = Queue.new
+      end
+
+      def lock
+        while !@mutex.try_lock
+          @waiters << Thread.current
+          break if @mutex.try_lock
+          Thread.stop
+        end
+      end
+
+      def unlock
+        @mutex.unlock
+        unless @waiters.empty?
+          t = @waiters.pop
+          t.run
+        end
+      end
+
+      def locked?
+        @mutex.locked?
+      end
+
+      def synchronize
+        lock
+        begin
+          yield
+        ensure
+          unlock
+        end
+      end
+    end
+
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
       @action_threads = []
@@ -30,7 +66,9 @@ class Eventbox
         else
           raise ArgumentError, "guard_time should be Numeric, Proc or nil"
       end
+      @calls = []
     end
+    attr_reader :calls
 
     # Used in ArgumentSanitizer
     def event_loop
@@ -66,8 +104,11 @@ class Eventbox
       current_thread==@ctrl_thread
     end
 
+    $calls = []
     def with_call_frame(name, answer_queue)
+      $calls << [Thread.current.object_id.*(2).to_s(16), :lock, caller[2]]
       @mutex.lock
+      $calls << [Thread.current.object_id.*(2).to_s(16), :locked]
       begin
         @latest_answer_queue = answer_queue
         @latest_call_name = name
@@ -79,7 +120,9 @@ class Eventbox
         @latest_answer_queue = nil
         @latest_call_name = nil
         @ctrl_thread = nil
+        $calls << [Thread.current.object_id.*(2).to_s(16), :unlock]
         @mutex.unlock
+        $calls << [Thread.current.object_id.*(2).to_s(16), :unlocked]
         @guard_time_proc&.call(diff_time, name)
       end
     end
@@ -256,6 +299,9 @@ class Eventbox
             # In this case access to the Eventbox instance raises a RefError.
             # Since it's now impossible to execute the action up to a blocking state, abort the action prematurely.
             raise unless @shutdown
+#           rescue Exception => err
+#     puts "ERRORR: #{err}:\n#{err.backtrace.join("\n")}"
+#     raise
           ensure
             thread_finished(qu.deq)
           end

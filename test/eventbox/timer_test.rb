@@ -12,13 +12,16 @@ class EventboxTimerTest < Minitest::Test
 
   def with_fake_time
     time = Time.at(0)
+    $calls << [Thread.current.object_id.*(2).to_s(16), :time_at]
 
     time_now = proc do
+#       $calls << [Thread.current.object_id.*(2).to_s(16), :time_now, time]
       time
     end
 
     kernel_sleep = proc do |sec=nil|
       if sec
+#         $calls << [Thread.current.object_id.*(2).to_s(16), :sleep, sec]
         time += sec
         sleep 0.001
       else
@@ -32,6 +35,11 @@ class EventboxTimerTest < Minitest::Test
         yield
       end
     end
+  rescue Exception => err
+    $calls << [Thread.current.object_id.*(2).to_s(16), :excpetion, err.class]
+    raise
+  ensure
+    $calls << [Thread.current.object_id.*(2).to_s(16), :time_normal]
   end
 
   def test_delay_init
@@ -54,6 +62,7 @@ class EventboxTimerTest < Minitest::Test
       include Eventbox::Timer
 
       yield_call def run(result)
+      sleep 0.1
         alerts = []
         timer_after(6) do
           alerts << 6
@@ -85,6 +94,7 @@ class EventboxTimerTest < Minitest::Test
       include Eventbox::Timer
 
       yield_call def run(result)
+      sleep 0.01
         alerts = []
         timer_after(6) do
           alerts << 6
@@ -116,6 +126,7 @@ class EventboxTimerTest < Minitest::Test
       include Eventbox::Timer
 
       yield_call def run(result)
+      sleep 0.01
         alerts = []
         timer_after(6) do
           alerts << 6
@@ -164,5 +175,21 @@ class EventboxTimerTest < Minitest::Test
       assert_equal [], alerts
     end
     eb.shutdown!
+  end
+
+  def test_all_repeated
+    50.times do
+      test_after
+#         test_every
+#         test_cancel
+#         test_cancel_with_retrigger
+    end
+  rescue Exception => err
+    puts "Exception"
+    $calls.each{|c| p c }
+    raise
+  else
+    puts "no exception"
+    $calls.each{|c| p c }
   end
 end
