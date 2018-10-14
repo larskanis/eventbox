@@ -1,4 +1,22 @@
 class Eventbox
+  # A pool of reusable threads for actions
+  #
+  # By default each call of an action method spawns a new thread and terminates the thread when the action is finished.
+  # If there are many short lived action calls, creation and termination of threads can be a bottleneck.
+  # In this case it is desireable to reuse threads for multiple actions.
+  # This is what a threadpool is made for.
+  #
+  # A threadpool creates a fixed number of threads at startup and distributes all action calls to free threads.
+  # If no free thread is available, the request in enqueued and processed in order.
+  #
+  # It is possible to use one threadpool for several {Eventbox} derivations and {Eventbox} instances at the same time.
+  # However using a threadpool adds the risk of deadlocks, if actions depend of each other and the threadpool provides too less threads.
+  # A threadpool can slow actions down, if too less threads are allocated, so that actions are enqueued.
+  # On the other hand a threadpool can also slow processing down, if the threadpool allocates many threads at startup, but doesn't makes use of them.
+  #
+  # An Eventbox with associated {ThreadPool} can be created per {Eventbox.with_options}.
+  # +num_threads+ is the number of allocated threads:
+  #   EventboxWithThreadpool = Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(num_threads))
   class ThreadPool < Eventbox
     class AbortAction < RuntimeError; end
 

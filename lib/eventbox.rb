@@ -16,7 +16,10 @@ class Eventbox
   class MultipleResults < RuntimeError; end
   class AbortAction < RuntimeError; end
 
-  # The options for instantiation of this class.
+  # Retrieves the Eventbox options of this class.
+  #
+  # @return [Hash]  The options for instantiation of this class.
+  # @see with_options
   def self.eventbox_options
     {
       threadpool: Thread,
@@ -27,7 +30,17 @@ class Eventbox
   # Create a new derived class with the given options.
   #
   # The options are merged with the options of the base class.
-  # See eventbox_options for available options.
+  # The following options are available:
+  #
+  # @param threadpool [Object] A threadpool.
+  #   Can be either +Thread+ (default) or a {Eventbox::Threadpool} instance.
+  # @param guard_time Internal methods should not do blocking operations.
+  #   Eventbox measures the time of each call to internal methods and warns, when it is exceeded.
+  #   There are several ways to configure guard_time:
+  #   Set to +nil+: Disable measuring of time to process internal methods.
+  #   Set to a +Numeric+ value: Maximum number of seconds allowed for internal methods.
+  #   Set to a +Proc+ object: Called after each call to an internal method.
+  #   The +Proc+ object is called with the number of seconds the call took as first and the name as second argument.
   def self.with_options(**options)
     Class.new(self) do
       define_singleton_method(:eventbox_options) do
@@ -46,7 +59,7 @@ class Eventbox
 
   private
 
-  # Create a new Eventbox instance.
+  # Create a new {Eventbox} instance.
   #
   # All arguments are passed to the init() method when defined.
   def initialize(*args, &block)
@@ -82,11 +95,15 @@ class Eventbox
     init(*args, &block)
   end
 
+  # @private
+  #
   # Used in ArgumentSanitizer
   def event_loop
     @event_loop
   end
 
+  # @private
+  #
   # Provide access to the eventbox instance as either
   # - self within the eventbox instance itself or
   # - WeakRef.new(self).__getobj__ within actions.
@@ -95,24 +112,25 @@ class Eventbox
     @eventbox.__getobj__
   end
 
+  # @private
   protected def __getobj__
     self
   end
 
   private
 
-  # This method is executed when the event loop is up and running.
+  # This method is executed for initialization of a Eventbox instance.
   #
-  # Derive this method for initialization.
+  # It can be used like +initialize+ in ordinary ruby classes.
   def init(*args)
   end
 
   # Create a proc object for asynchronous (fire-and-forget) calls similar to {async_call}.
   #
   # The created object can be safely called from any thread.
-  # All block arguments are passed through the ArgumentSanitizer.
-  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the Eventbox instance.
-  # Instead use Eventbox#action in these cases.
+  # All block arguments are passed through the {ArgumentSanitizer}.
+  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
+  # Instead use {Eventbox.action} in these cases.
   #
   # The block always returns +self+ to the caller.
   def async_proc(name=nil, &block)
@@ -122,15 +140,13 @@ class Eventbox
   # Create a Proc object for synchronous calls similar to {sync_call}.
   #
   # The created object can be safely called from any thread.
-  # All block arguments are passed through the ArgumentSanitizer.
-  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the Eventbox instance.
-  # Instead use Eventbox#action in these cases.
+  # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
+  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
+  # Instead use {Eventbox.action} in these cases.
   #
-  # This Proc is simular to #async_proc , but when the block is invoked, it is executed and it's return value is returned to the caller.
-  # Since all internal processing within a Eventbox instance must not involve blocking operations, sync procs can only return immediate values.
+  # This Proc is simular to {async_proc}, but when the block is invoked, it is executed and it's return value is returned to the caller.
+  # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync procs can only return immediate values.
   # For deferred results use {yield_proc} instead.
-  #
-  # All method arguments as well as the result value are passed through the ArgumentSanitizer.
   def sync_proc(name=nil, &block)
     @event_loop.new_sync_proc(name=nil, &block)
   end
@@ -140,17 +156,17 @@ class Eventbox
   # The created object can be safely called from any external thread.
   # However yield procs can't be invoked internally (since deferred results require non-sequential program execution).
   #
-  # This proc type is simular to #sync_proc , however it's not the result of the block that is returned.
+  # This proc type is simular to {sync_proc}, however it's not the result of the block that is returned.
   # Instead the block is called with one additional argument internally, which is used to yield a result value.
   # The result value can be yielded within the called block, but it can also be called by any other internal or external method, leading to a deferred proc return.
   # The external thread calling this proc is suspended until a result is yielded.
   #
-  # All method arguments as well as the result value are passed through the ArgumentSanitizer.
+  # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
   def yield_proc(name=nil, &block)
     @event_loop.new_yield_proc(name=nil, &block)
   end
 
-  # Force stop of all action threads spawned by this Eventbox instance
+  # Force stop of all action threads spawned by this {Eventbox} instance
   #
   # Cleanup of threads will be done through the garbage collector otherwise.
   # However in some cases automatic garbage collection doesn't remove all instances due to running action threads.

@@ -7,7 +7,7 @@ class Eventbox
   #     include Eventbox::Timer
   #
   #     async_call def init
-  #       super # make sure Timer.init is called
+  #       super   # make sure Timer#init is called
   #       timer_after(1) do
   #         puts "one second elapsed"
   #       end
@@ -17,11 +17,11 @@ class Eventbox
   # The main functions are timer_after and timer_every.
   # They schedule asynchronous calls to the given block:
   #   timer_after(3) do
-  #     # executed in 3 seconds
+  #     # executed once after 3 seconds
   #   end
   #
   #   timer_every(3) do
-  #     # executed every 3 seconds
+  #     # executed repeatedly every 3 seconds
   #   end
   #
   # Both functions return an Alarm object which can be used to cancel the alarm through timer_cancel.

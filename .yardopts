@@ -1,0 +1,6 @@
+--readme README.md
+--title "Eventbox"
+--protected
+--private
+--no-private
+--embed-mixin Eventbox::Boxable

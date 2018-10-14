@@ -5,12 +5,12 @@
 
 _Manage multithreading with the safety of event based programming_
 
-Eventbox objects are event based from the inside but thread safe from the outside.
-All code inside an Eventbox object is executed non-concurrently.
+{Eventbox} objects are event based from the inside but thread safe from the outside.
+All code inside an {Eventbox} object is executed non-concurrently.
 It must not do any blocking operations.
-All blocking operations can be executed in action threads spawned by the `action` method.
+All blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
 Data races between internal and external objects are avoided through filters applied to all inputs and outputs.
-That way Eventbox guarantees stable states without a need for any locks.
+That way {Eventbox} guarantees stable states without a need for any locks.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ Or install it yourself as:
 
 ## Usage
 
-Let's build a Queue class:
+Let's build a simple Queue class:
 
 ```ruby
 class Queue < Eventbox

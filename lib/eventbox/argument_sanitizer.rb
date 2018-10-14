@@ -223,6 +223,14 @@ class Eventbox
 
     public
 
+    # Mark a mutable object as to be wrapped as {InternalObject} or {ExternalObject} instead of being copied.
+    #
+    # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
+    #
+    # A marked object is not passed by copy, but passed by reference.
+    # Wrapping as {InternalObject} or {ExternalObject} denies external access to internal objects and vice versa.
+    # However the object is passed as reference and unwrapped when passed back to the original scope.
+    # It can therefore be used to modify the original object even after traversing the boundary.
     def mutable_object(object)
       if event_loop.internal_thread?
         ObjectRegistry.set_tag(object, event_loop)
@@ -233,6 +241,7 @@ class Eventbox
     end
   end
 
+  # Base wrapper class for objects created internal or external.
   class WrappedObject
     attr_reader :name
     def initialize(object, event_loop, name=nil)
@@ -242,6 +251,8 @@ class Eventbox
     end
   end
 
+  # Generic wrapper for objects created internal within some Eventbox instance.
+  #
   # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
   class InternalObject < WrappedObject
     def access_allowed?(current_thread=Thread.current)
@@ -254,6 +265,8 @@ class Eventbox
     end
   end
 
+  # Generic wrapper for objects created external of some Eventbox instance.
+  #
   # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
     def access_allowed?(current_thread=Thread.current)
@@ -266,21 +279,31 @@ class Eventbox
     end
   end
 
+  # Base class for Proc objects created internal or external.
   class WrappedProc < Proc
   end
 
+  # Base class for Proc objects created internal within some Eventbox instance.
   class InternalProc < WrappedProc
   end
 
+  # Proc objects created intern within some Eventbox instance per {Eventbox#async_proc}
   class AsyncProc < InternalProc
   end
 
+  # Proc objects created intern within some Eventbox instance per {Eventbox#sync_proc}
   class SyncProc < InternalProc
   end
 
+  # Proc objects created intern within some Eventbox instance per {Eventbox#yield_proc}
   class YieldProc < InternalProc
   end
 
+  # Wrapper for Proc objects created external of some Eventbox instance.
+  #
+  # External Proc objects can not be called from internal methods.
+  # Instead they can be passed through to actions or to extern to be called there.
+  # In this case a {ExternalProc} is unwrapped back to an ordinary Proc object.
   class ExternalProc < WrappedProc
     attr_reader :name
     def initialize(object, event_loop, name=nil)

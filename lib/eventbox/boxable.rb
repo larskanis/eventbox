@@ -33,9 +33,9 @@ class Eventbox
     # Define a threadsafe method for asynchronous (fire-and-forget) calls.
     #
     # The created method can be safely called from any thread.
-    # All method arguments are passed through the ArgumentSanitizer.
-    # The method itself might not do any blocking calls or extensive computations - this would impair responsiveness of the Eventbox instance.
-    # Instead use Eventbox#action in these cases.
+    # All method arguments are passed through the {ArgumentSanitizer}.
+    # The method itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
+    # Instead use {Eventbox.action Eventbox.action} in these cases.
     #
     # The method always returns +self+ to the caller.
     def async_call(name, &block)
@@ -61,11 +61,11 @@ class Eventbox
     # Define a method for synchronous calls.
     #
     # The created method can be safely called from any thread.
-    # It is simular to #async_call , but the method waits until the method body is executed and returns its return value.
-    # Since all internal processing within a Eventbox instance must not involve blocking operations, sync calls can only return immediate values.
+    # It is simular to {async_call}, but the method waits until the method body is executed and returns its return value.
+    # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync calls can only return immediate values.
     # For deferred results use {yield_call} instead.
     #
-    # All method arguments as well as the result value are passed through the ArgumentSanitizer.
+    # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
     def sync_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
@@ -90,12 +90,12 @@ class Eventbox
     # The created method can be safely called from any external thread.
     # However yield calls can't be invoked internally (since deferred results require non-sequential program execution).
     #
-    # This call type is simular to #sync_call , however it's not the result of the method that is returned.
+    # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
     # Instead the method is called with one additional argument internally, which is used to yield a result value.
     # The result value can be yielded within the called method, but it can also be called by any other internal or external method, leading to a deferred method return.
     # The external thread calling this method is suspended until a result is yielded.
     #
-    # All method arguments as well as the result value are passed through the ArgumentSanitizer.
+    # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
     def yield_call(name, &block)
       with_block_or_def(name, block) do |*args, &cb|
         if @event_loop.internal_thread?
@@ -152,13 +152,14 @@ class Eventbox
 
     # Define a method for asynchronous execution.
     #
-    # The call to the action method returns immediately after starting a new action and returns an {Action} object.
+    # The call to the action method returns immediately after starting a new action.
+    # It returns an {Action} object.
     # By default each call to an action method spawns a new thread which executes the code of the action definition.
     # Alternatively a threadpool can be assigned by {with_options}.
     #
-    # All method arguments are passed through the ArgumentSanitizer.
+    # All method arguments are passed through the {ArgumentSanitizer}.
     #
-    # Actions can return state changes or objects to the event loop by calls to methods created by #async_call, #sync_call or #yield_call or through calling async_proc, sync_proc or yield_proc objects.
+    # Actions can return state changes or objects to the event loop by calls to methods created by {async_call}, {sync_call} or {yield_call} or through calling {async_proc}, {sync_proc} or {yield_proc} objects.
     # To avoid unsafe shared objects, the action block doesn't have access to local variables or instance variables.
     #
     # The {Action} object can be used to interrupt the program execution by an exception.
@@ -167,9 +168,11 @@ class Eventbox
     #   async_call def init
     #     do_something("value1")
     #   end
-    #   action def do_something(param1, action)
-    #     # pass `action' to some internal or external method,
-    #     # so that it's able to send a signal per Action#raise
+    #   action def do_something(str, action)
+    #     str              # => "value1"
+    #     action.current?  # => true
+    #     # `action' can be passed to some internal or external method,
+    #     # to send a signal per Action#raise
     #   end
     #
     def action(name, &block)
