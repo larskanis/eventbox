@@ -34,15 +34,9 @@ class Eventbox
     end
 
     class Alarm
-      include Comparable
-
       def initialize(ts, &block)
         @timestamp = ts
         @block = block
-      end
-
-      def <=>(other)
-        @timestamp <=> other
       end
 
       attr_reader :timestamp
@@ -120,20 +114,16 @@ class Eventbox
     end
 
     # Cancel an alarm previously scheduled per timer_after or timer_every
-    sync_call def timer_cancel(alarm)
-      i = @timer_alarms.index(alarm)
-      if i
-        @timer_alarms.slice!(i)
-        if i == @timer_alarms.size
-          @timer_action.raise(Reload) unless @timer_action.current?
-        end
+    async_call def timer_cancel(alarm)
+      a = @timer_alarms.delete(alarm)
+      if a
         timer_check_integrity
       end
     end
 
     # @private
     private def timer_add_alarm(alarm)
-      i = @timer_alarms.bsearch_index {|t| t <= alarm }
+      i = @timer_alarms.bsearch_index {|t| t.timestamp <= alarm.timestamp }
       if i
         @timer_alarms[i, 0] = alarm
       else
@@ -144,9 +134,9 @@ class Eventbox
     end
 
     private def timer_check_integrity
-      @timer_alarms.inject(nil) do |max, a|
-        raise InternalError, "alarms are not ordered: #{@timer_alarms.inspect}" if max && max<a
-        a
+      @timer_alarms.inject(nil) do |min, a|
+        raise InternalError, "alarms are not ordered: #{@timer_alarms.inspect}" if min && min < a.timestamp
+        a.timestamp
       end
     end
 
@@ -157,7 +147,7 @@ class Eventbox
 
     # @private
     private sync_call def timer_fire(now=Time.now)
-      while @timer_alarms.last&.<=(now)
+      while @timer_alarms.last&.timestamp&.<=(now)
         a = @timer_alarms.pop
         if a.fire_then_repeat?(now)
           timer_add_alarm(a)
