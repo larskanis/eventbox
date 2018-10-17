@@ -57,7 +57,8 @@ class Eventbox
 
     def dissect_struct_members(arg)
       ms = arg.members
-      vs = arg.values
+      # call Array#map on Struct#values to work around bug JRuby bug https://github.com/jruby/jruby/issues/5372
+      vs = arg.values.map{|a| a }
 
       ms.each do |m|
         arg[m] = nil
