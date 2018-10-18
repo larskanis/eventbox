@@ -250,6 +250,10 @@ class Eventbox
       @event_loop = event_loop
       @name = name
     end
+
+    def inspect
+      "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect}>"
+    end
   end
 
   # Generic wrapper for objects created internal within some Eventbox instance.
