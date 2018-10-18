@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Lars Kanis"]
   spec.email         = ["lars@greiz-reinsdorf.de"]
 
-  if File.read("README.md") =~ /^_(.*?)_$\s^\n(.*?)\n$/m
+  if File.read("README.md", encoding: 'utf-8') =~ /^_(.*?)_$\s^\n(.*?)\n$/m
     spec.summary = $1
     spec.description = $2
   end
