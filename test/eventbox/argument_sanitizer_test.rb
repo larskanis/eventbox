@@ -48,7 +48,7 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     attr_reader :c
   end
 
-  def test_separate_instance_variables
+  def test_dissect_instance_variables
     eb = Class.new(Eventbox) do
       sync_call def go(obj)
         [obj.class, obj.a.class, obj.b.class, obj.c.class]
@@ -72,7 +72,7 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     attr_accessor :x
   end
 
-  def test_separate_struct_members
+  def test_dissect_struct_members
     eb = Class.new(Eventbox) do
       sync_call def go(obj)
         [obj.class, obj.a.class, obj.b.class, obj.c.class, obj.x.class]
@@ -99,7 +99,7 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     attr_accessor :x
   end
 
-  def test_separate_array_values
+  def test_dissect_array_values
     eb = Class.new(Eventbox) do
       sync_call def go(obj)
         [obj.class, obj[0].class, obj[1].class, obj[2].class, obj.x.class]
@@ -126,7 +126,7 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     attr_accessor :x
   end
 
-  def test_separate_hash_values
+  def test_dissect_hash_values
     eb = Class.new(Eventbox) do
       sync_call def go(obj)
         [obj.class, obj[:a].class, obj[:b].class, obj[:c].class, obj.x.class]
