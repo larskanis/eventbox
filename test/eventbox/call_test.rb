@@ -192,7 +192,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     str = "abc".dup
-    assert_equal "abc", fc.mutable_object(str)
+    assert_equal "abc", fc.shared_object(str)
     value = fc.out(str)
 
     assert_equal [str, "Eventbox::ExternalObject"], value
@@ -215,7 +215,7 @@ class EventboxCallTest < Minitest::Test
   def test_internal_object_sync_call_tagged
     fc = Class.new(Eventbox) do
       sync_call def out
-        mutable_object("abc")
+        shared_object("abc")
       end
     end.new
 

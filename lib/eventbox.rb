@@ -76,7 +76,7 @@ class Eventbox
       self.class.instance_variable_set(:@eventbox_methods_checked, true)
 
       obj = Object.new
-      meths = methods - obj.methods - [:__getobj__, :shutdown!, :mutable_object]
+      meths = methods - obj.methods - [:__getobj__, :shutdown!, :shared_object]
       prmeths = private_methods - obj.private_methods
       prohib = meths.find do |name|
         !prmeths.include?(:"__#{name}__")

@@ -8,7 +8,7 @@ class Eventbox
   # * Eventbox, Action and Module objects
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
   #
-  # If the object has been marked as {mutable_object}, it is wrapped as {InternalObject} or {ExternalObject}.
+  # If the object has been marked as {shared_object}, it is wrapped as {InternalObject} or {ExternalObject}.
   # In all other cases the following rules apply:
   # * If the object is mashalable, it is passed as a deep copy through Marshal.dump and Marshal.load .
   # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
@@ -174,7 +174,7 @@ class Eventbox
               end
             rescue TypeError
               # Object not copyable -> wrap object as internal or external object
-              sanity_before_queue2(mutable_object(arg), name)
+              sanity_before_queue2(shared_object(arg), name)
             end
 
           else
@@ -224,15 +224,16 @@ class Eventbox
 
     public
 
-    # Mark a mutable object as to be wrapped as {InternalObject} or {ExternalObject} instead of being copied.
+    # Mark an object as to be shared instead of copied.
+    #
+    # A marked object is never passed as copy, but passed as reference.
+    # The object is therefore wrapped as {InternalObject} or {ExternalObject} when used in an unsafe scope.
+    # Wrapping as {InternalObject} or {ExternalObject} denies access from external scope to internal objects and vice versa.
+    # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
+    # It can therefore be used to modify the original object even after traversing the boundary.
     #
     # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
-    #
-    # A marked object is not passed by copy, but passed by reference.
-    # Wrapping as {InternalObject} or {ExternalObject} denies external access to internal objects and vice versa.
-    # However the object is passed as reference and unwrapped when passed back to the original scope.
-    # It can therefore be used to modify the original object even after traversing the boundary.
-    def mutable_object(object)
+    def shared_object(object)
       if event_loop.internal_thread?
         ObjectRegistry.set_tag(object, event_loop)
       else

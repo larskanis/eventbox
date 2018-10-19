@@ -148,7 +148,7 @@ def test_action_external_object_tagged
     end
   end.new
 
-  klass, str2 = fc.go(fc.mutable_object(str))
+  klass, str2 = fc.go(fc.shared_object(str))
 
   assert_equal String, klass
   assert_same str, str2

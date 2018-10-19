@@ -4,11 +4,11 @@ class EventboxArgumentSanitizerTest < Minitest::Test
   def test_untaggable_object_intern
     eb = Class.new(Eventbox) do
       sync_call def go(str)
-        mutable_object(str)
+        shared_object(str)
       end
     end.new
 
-    err = assert_raises(Eventbox::InvalidAccess) { eb.go(eb.mutable_object("mutable")) }
+    err = assert_raises(Eventbox::InvalidAccess) { eb.go(eb.shared_object("mutable")) }
     assert_match(/not taggable/, err.to_s)
   end
 
@@ -16,9 +16,9 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     eb = Class.new(Eventbox) do
     end.new
 
-    err = assert_raises(Eventbox::InvalidAccess) { eb.mutable_object("mutable".freeze) }
+    err = assert_raises(Eventbox::InvalidAccess) { eb.shared_object("mutable".freeze) }
     assert_match(/not taggable/, err.to_s)
-    err = assert_raises(Eventbox::InvalidAccess) { eb.mutable_object(123) }
+    err = assert_raises(Eventbox::InvalidAccess) { eb.shared_object(123) }
     assert_match(/not taggable/, err.to_s)
   end
 
