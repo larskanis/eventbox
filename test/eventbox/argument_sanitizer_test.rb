@@ -29,9 +29,12 @@ class EventboxArgumentSanitizerTest < Minitest::Test
       end
     end.new
 
-    pr = fc.pr
-    ex = assert_raises(NoMethodError){ pr.call }
-    assert_match(/`call'/, ex.to_s)
+    ios = fc.pr
+    assert_kind_of Array, ios
+    io = ios.first
+    assert_kind_of Eventbox::InternalObject, io
+    ex = assert_raises(NoMethodError){ ios.first.close }
+    assert_match(/`close'/, ex.to_s)
   end
 
   class TestObject
