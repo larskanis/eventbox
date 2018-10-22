@@ -32,6 +32,17 @@ class EventboxCallTest < Minitest::Test
     assert_match(/method `test' at/, err.to_s)
   end
 
+  def test_initialize_method_error
+    err = assert_raises(Eventbox::InvalidAccess) do
+      Class.new(Eventbox) do
+        def initialize
+          super
+        end
+      end.new
+    end
+    assert_match(/method `initialize' at/, err.to_s)
+  end
+
   class TestInitWithDef < Eventbox
     async_call def init(num, pr, pi)
       @values = [num.class, pr.class, pi.class, Thread.current.object_id]

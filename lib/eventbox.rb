@@ -85,6 +85,11 @@ class Eventbox
         meth = method(prohib)
         raise InvalidAccess, "method `#{prohib}' at #{meth.source_location.join(":")} is not properly defined -> it must be created per async_call, sync_call, yield_call or private prefix"
       end
+
+      meth = method(:initialize)
+      unless meth.source_location == Eventbox.instance_method(:initialize).source_location
+        raise InvalidAccess, "method `initialize' at #{meth.source_location.join(":")} must not be overwritten - use `init' instead"
+      end
     end
 
     # Run the processing of calls (the event loop) in a separate class.
