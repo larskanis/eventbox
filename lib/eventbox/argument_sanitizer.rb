@@ -26,7 +26,7 @@ class Eventbox
       args.length <= 1 ? args.first : args
     end
 
-    def dissect_instance_variables(arg)
+    def dissect_instance_variables(arg, target_event_loop)
       # Separate the instance variables from the object
       ivns = arg.instance_variables
       ivvs = ivns.map do |ivn|
@@ -48,14 +48,14 @@ class Eventbox
 
       # sanitize instance variables independently and write them to the copied object
       ivns.each_with_index do |ivn, ivni|
-        ivv = sanity_before_queue2(ivvs[ivni], ivn)
+        ivv = sanitize_value(ivvs[ivni], target_event_loop, ivn)
         arg2.instance_variable_set(ivn, ivv)
       end
 
       arg2
     end
 
-    def dissect_struct_members(arg)
+    def dissect_struct_members(arg, target_event_loop)
       ms = arg.members
       # call Array#map on Struct#values to work around bug JRuby bug https://github.com/jruby/jruby/issues/5372
       vs = arg.values.map{|a| a }
@@ -71,14 +71,14 @@ class Eventbox
       end
 
       ms.each_with_index do |m, i|
-        v2 = sanity_before_queue2(vs[i], m)
+        v2 = sanitize_value(vs[i], target_event_loop, m)
         arg2[m] = v2
       end
 
       arg2
     end
 
-    def dissect_hash_values(arg)
+    def dissect_hash_values(arg, target_event_loop)
       h = arg.dup
 
       h.each_key do |k|
@@ -92,13 +92,13 @@ class Eventbox
       end
 
       h.each do |k, v|
-        arg2[k] = sanity_before_queue2(v, k)
+        arg2[k] = sanitize_value(v, target_event_loop, k)
       end
 
       arg2
     end
 
-    def dissect_array_values(arg, name)
+    def dissect_array_values(arg, target_event_loop, name)
       vs = arg.dup
 
       vs.each_index do |i|
@@ -112,16 +112,20 @@ class Eventbox
       end
 
       vs.each_with_index do |v, i|
-        v2 = sanity_before_queue2(v, name)
+        v2 = sanitize_value(v, target_event_loop, name)
         arg2[i] = v2
       end
 
       arg2
     end
 
-    def sanity_before_queue2(arg, name)
+    def sanitize_value(arg, target_event_loop, name)
       case arg
-      when WrappedObject, WrappedProc, Action # If object is already wrapped -> pass it through
+      when WrappedObject
+        arg.access_allowed?(target_event_loop) ? arg.object(target_event_loop) : arg
+      when ExternalProc
+        arg.direct_callable?(target_event_loop) ? arg.object(target_event_loop) : arg
+      when InternalProc, Action # If object is already wrapped -> pass it through
         arg
       when Module # Class or Module definitions are passed through
         arg
@@ -134,7 +138,7 @@ class Eventbox
         case ObjectRegistry.get_tag(arg)
         when EventLoop
           InternalObject.new(arg, event_loop, name)
-        when :extern
+        when ExternalSharedObject
           ExternalObject.new(arg, event_loop, name)
         else
           # Not tagged -> try to deep copy the object
@@ -146,35 +150,35 @@ class Eventbox
             begin
               case arg
               when Array
-                dissect_array_values(arg, name) do |arg2|
-                  dissect_instance_variables(arg2) do |arg3|
+                dissect_array_values(arg, target_event_loop, name) do |arg2|
+                  dissect_instance_variables(arg2, target_event_loop) do |arg3|
                     Marshal.load(Marshal.dump(arg3))
                   end
                 end
 
               when Hash
-                dissect_hash_values(arg) do |arg2|
-                  dissect_instance_variables(arg2) do |arg3|
+                dissect_hash_values(arg, target_event_loop) do |arg2|
+                  dissect_instance_variables(arg2, target_event_loop) do |arg3|
                     Marshal.load(Marshal.dump(arg3))
                   end
                 end
 
               when Struct
-                dissect_struct_members(arg) do |arg2|
-                  dissect_instance_variables(arg2) do |arg3|
+                dissect_struct_members(arg, target_event_loop) do |arg2|
+                  dissect_instance_variables(arg2, target_event_loop) do |arg3|
                     Marshal.load(Marshal.dump(arg3))
                   end
                 end
 
               else
-                dissect_instance_variables(arg) do |empty_arg|
+                dissect_instance_variables(arg, target_event_loop) do |empty_arg|
                   # Retry to dump the now empty object
                   Marshal.load(Marshal.dump(empty_arg))
                 end
               end
             rescue TypeError
               # Object not copyable -> wrap object as internal or external object
-              sanity_before_queue2(shared_object(arg), name)
+              sanitize_value(shared_object(arg), target_event_loop, name)
             end
 
           else
@@ -184,23 +188,8 @@ class Eventbox
       end
     end
 
-    def sanity_before_queue(args, name=nil)
-      args.is_a?(Array) ? args.map { |arg| sanity_before_queue2(arg, name) } : sanity_before_queue2(args, name)
-    end
-
-    def sanity_after_queue2(arg, current_thread=Thread.current)
-      case arg
-      when WrappedObject
-        arg.access_allowed?(current_thread) ? arg.object : arg
-      when ExternalProc
-        arg.direct_callable?(current_thread) ? arg.object : arg
-      else
-        arg
-      end
-    end
-
-    def sanity_after_queue(args, current_thread=Thread.current)
-      args.is_a?(Array) ? args.map { |arg| sanity_after_queue2(arg, current_thread) } : sanity_after_queue2(args, current_thread)
+    def sanitize_values(args, target_event_loop, name=nil)
+      args.is_a?(Array) ? args.map { |arg| sanitize_value(arg, target_event_loop, name) } : sanitize_value(args, target_event_loop, name)
     end
 
     def callback_loop(answer_queue)
@@ -208,16 +197,16 @@ class Eventbox
         rets = answer_queue.deq
         case rets
         when EventLoop::Callback
-          args = sanity_after_queue(rets.args)
-          cbres = sanity_after_queue(rets.block).yield(*args)
+          args = rets.args
+          cbres = rets.block.yield(*args)
 
           if rets.cbresult
-            cbres = sanity_before_queue(cbres)
+            cbres = sanitize_values(cbres, event_loop)
             event_loop.external_proc_result(rets.cbresult, cbres)
           end
         else
           answer_queue.close if answer_queue.respond_to?(:close)
-          return sanity_after_queue(rets)
+          return rets
         end
       end
     end
@@ -237,7 +226,7 @@ class Eventbox
       if event_loop.internal_thread?
         ObjectRegistry.set_tag(object, event_loop)
       else
-        ObjectRegistry.set_tag(object, :extern)
+        ObjectRegistry.set_tag(object, ExternalSharedObject)
       end
       object
     end
@@ -250,6 +239,7 @@ class Eventbox
       @object = object
       @event_loop = event_loop
       @name = name
+      @dont_marshal = ExternalSharedObject # protect this object for being marshaled
     end
 
     def inspect
@@ -261,12 +251,12 @@ class Eventbox
   #
   # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
   class InternalObject < WrappedObject
-    def access_allowed?(current_thread=Thread.current)
-      @event_loop.internal_thread?(current_thread)
+    def access_allowed?(target_event_loop=nil)
+      @event_loop.internal_thread?(target_event_loop)
     end
 
-    def object
-      raise InvalidAccess, "access to internal object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless access_allowed?
+    def object(target_event_loop=nil)
+      raise InvalidAccess, "access to internal object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless access_allowed?(target_event_loop)
       @object
     end
   end
@@ -275,12 +265,12 @@ class Eventbox
   #
   # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
-    def access_allowed?(current_thread=Thread.current)
-      !@event_loop.internal_thread?(current_thread)
+    def access_allowed?(target_event_loop=nil)
+      !@event_loop.internal_thread?(target_event_loop)
     end
 
-    def object
-      raise InvalidAccess, "access to external object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless access_allowed?
+    def object(target_event_loop=nil)
+      raise InvalidAccess, "access to external object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless access_allowed?(target_event_loop)
       @object
     end
   end
@@ -318,13 +308,15 @@ class Eventbox
       @name = name
     end
 
-    def direct_callable?(current_thread=Thread.current)
-      !@event_loop.internal_thread?(current_thread)
+    def direct_callable?(target_event_loop=nil)
+      !@event_loop.internal_thread?(target_event_loop)
     end
 
-    def object
-      raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?
+    def object(target_event_loop=nil)
+      raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?(target_event_loop)
       @object
     end
   end
+
+  ExternalSharedObject = IO.pipe.first
 end

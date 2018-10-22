@@ -12,7 +12,6 @@ class Eventbox
       @threadpool = threadpool
       @action_threads = []
       @action_threads_for_gc = []
-      @ctrl_thread = nil
       @mutex = Mutex.new
       @shutdown = false
       @guard_time_proc = case guard_time
@@ -58,12 +57,8 @@ class Eventbox
     end
 
     # Is the caller running within the internal context?
-    def internal_thread?(current_thread=Thread.current)
-      # Access to @ctrl_thread is lock-free, because
-      # - assignment to @ctrl_thread is atomic,
-      # - equality comparison is atomic and
-      # - @ctrl_thread is nil or a Thread and both evaluate to false for external threads.
-      current_thread==@ctrl_thread
+    def internal_thread?(target_event_loop=nil)
+      target_event_loop ? target_event_loop == self : @mutex.owned?
     end
 
     def with_call_frame(name, answer_queue)
@@ -71,14 +66,12 @@ class Eventbox
       begin
         @latest_answer_queue = answer_queue
         @latest_call_name = name
-        @ctrl_thread = Thread.current
         start_time = Time.now
         yield
       ensure
         diff_time = Time.now - start_time
         @latest_answer_queue = nil
         @latest_call_name = nil
-        @ctrl_thread = nil
         @mutex.unlock
         @guard_time_proc&.call(diff_time, name)
       end
@@ -86,36 +79,36 @@ class Eventbox
 
     def async_call(box, name, args, block)
       with_call_frame(name, nil) do
-        box.send("__#{name}__", *sanity_after_queue(args), &sanity_after_queue(block))
+        box.send("__#{name}__", *args, &block)
       end
     end
 
     def sync_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        res = box.send("__#{name}__", *sanity_after_queue(args), &sanity_after_queue(block))
-        res = sanity_before_queue(res)
+        res = box.send("__#{name}__", *args, &block)
+        res = sanitize_values(res, :extern)
         answer_queue << res
       end
     end
 
     def yield_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        box.send("__#{name}__", *sanity_after_queue(args), _result_proc(answer_queue, name), &sanity_after_queue(block))
+        box.send("__#{name}__", *args, _result_proc(answer_queue, name), &block)
       end
     end
 
     # Anonymous version of async_call
     def async_proc_call(pr, args)
       with_call_frame(AsyncProc, nil) do
-        pr.yield(*sanity_after_queue(args))
+        pr.yield(*args)
       end
     end
 
     # Anonymous version of sync_call
     def sync_proc_call(pr, args, answer_queue)
       with_call_frame(SyncProc, answer_queue) do
-        res = pr.yield(*sanity_after_queue(args))
-        res = sanity_before_queue(res)
+        res = pr.yield(*args)
+        res = sanitize_values(res, :extern)
         answer_queue << res
       end
     end
@@ -123,14 +116,13 @@ class Eventbox
     # Anonymous version of yield_call
     def yield_proc_call(pr, args, answer_queue)
       with_call_frame(YieldProc, answer_queue) do
-        pr.yield(*sanity_after_queue(args), _result_proc(answer_queue, pr))
+        pr.yield(*args, _result_proc(answer_queue, pr))
       end
     end
 
     # Called when an external proc finished
     def external_proc_result(cbresult, res)
       with_call_frame(ExternalProc, nil) do
-        res = sanity_after_queue(res)
         cbresult.yield(*res)
       end
     end
@@ -143,7 +135,7 @@ class Eventbox
           block.yield(*args)
         else
           # called externally
-          args = sanity_before_queue(args)
+          args = sanitize_values(args, self)
           async_proc_call(block, args)
         end
       end
@@ -158,7 +150,7 @@ class Eventbox
         else
           # called externally
           answer_queue = Queue.new
-          args = sanity_before_queue(args)
+          args = sanitize_values(args, self)
           sync_proc_call(block, args, answer_queue)
           callback_loop(answer_queue)
         end
@@ -174,7 +166,7 @@ class Eventbox
         else
           # called externally
           answer_queue = Queue.new
-          args = sanity_before_queue(args)
+          args = sanitize_values(args, self)
           yield_proc_call(block, args, answer_queue)
           callback_loop(answer_queue)
         end
@@ -192,7 +184,7 @@ class Eventbox
           end
         end
         resu = return_args(resu)
-        resu = sanity_before_queue(resu)
+        resu = sanitize_values(resu, :extern)
         answer_queue << resu
         result_yielded = true
       end
@@ -226,7 +218,7 @@ class Eventbox
 
     def _external_proc_call(block, name, cbargs, cbresult)
       if @latest_answer_queue
-        @latest_answer_queue << Callback.new(block, sanity_before_queue(cbargs), cbresult)
+        @latest_answer_queue << Callback.new(block, sanitize_values(cbargs, :extern), cbresult)
       elsif @latest_call_name
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else
@@ -241,8 +233,6 @@ class Eventbox
         @threadpool.new do
           begin
             Thread.handle_interrupt(AbortAction => :on_blocking) do
-              args = sanity_after_queue(args)
-
               if meth.arity == args.length
                 meth.call(*args)
               else

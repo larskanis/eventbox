@@ -231,9 +231,8 @@ class Eventbox
         ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
       end
 
-      if @event_loop.internal_thread?(@thread)
-        args = sanity_before_queue(args)
-        args = sanity_after_queue(args, @thread)
+      if @event_loop.internal_thread?
+        args = sanitize_values(args, :extern)
       end
       @thread.raise(*args)
     end

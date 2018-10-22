@@ -12,6 +12,44 @@ class EventboxArgumentSanitizerTest < Minitest::Test
     assert_match(/not taggable/, err.to_s)
   end
 
+  def test_shared_object_intern
+    eb = Class.new(Eventbox) do
+      sync_call def go(obj)
+        return obj.class, [shared_object([obj])]
+      end
+      sync_call def back(obj)
+        return obj.class, obj[0].class, obj[0][0].class
+      end
+    end.new
+
+    kl0, res = eb.go("string")
+    assert_equal String, kl0
+    assert_kind_of Array, res
+    assert_kind_of Eventbox::InternalObject, res[0]
+
+    kl1, kl2, kl3 = eb.back(res)
+    assert_equal Array, kl1
+    assert_equal Array, kl2
+    assert_equal String, kl3
+  end
+
+  def test_shared_object_extern
+    eb = Class.new(Eventbox) do
+      sync_call def go(obj)
+        return obj, obj.class, obj[0].class
+      end
+    end.new
+
+    obj = [eb.shared_object(["string"])]
+    res, kl1, kl2 = eb.go(obj)
+    assert_equal Array, kl1
+    assert_equal Eventbox::ExternalObject, kl2
+    assert_same obj[0], res[0]
+    assert_kind_of Array, res
+    assert_kind_of Array, res[0]
+    assert_equal "string", res[0][0]
+  end
+
   def test_untaggable_object_extern
     eb = Class.new(Eventbox) do
     end.new
