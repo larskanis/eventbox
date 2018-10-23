@@ -233,7 +233,7 @@ class Eventbox
   # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
   class InternalObject < WrappedObject
     def object_for(target_event_loop)
-      @event_loop.internal_thread?(target_event_loop) ? @object : self
+      @event_loop == target_event_loop ? @object : self
     end
   end
 
@@ -242,7 +242,7 @@ class Eventbox
   # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
     def object_for(target_event_loop)
-      @event_loop.internal_thread?(target_event_loop) ? self : @object
+      @event_loop == target_event_loop ? self : @object
     end
   end
 
@@ -280,7 +280,7 @@ class Eventbox
     end
 
     def object_for(target_event_loop)
-      @event_loop.internal_thread?(target_event_loop) ? self : @object
+      @event_loop == target_event_loop ? self : @object
     end
   end
 

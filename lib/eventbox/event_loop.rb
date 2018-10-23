@@ -57,8 +57,8 @@ class Eventbox
     end
 
     # Is the caller running within the internal context?
-    def internal_thread?(target_event_loop=nil)
-      target_event_loop ? target_event_loop == self : @mutex.owned?
+    def internal_thread?
+      @mutex.owned?
     end
 
     def with_call_frame(name, answer_queue)
