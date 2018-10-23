@@ -8,8 +8,9 @@ class Eventbox
   # * Eventbox, Action and Module objects
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
   #
-  # If the object has been marked as {Eventbox#shared_object}, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow (return value or call argument).
-  # If the object is a {InternalObject}, {ExternalObject} or {ExternalProc}, it is unwrapped.
+  # The following rules apply for wrapping/unwrapping:
+  # * If the object has been marked as {Eventbox#shared_object}, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow (return value or call argument).
+  # * If the object is a {InternalObject}, {ExternalObject} or {ExternalProc} and fits to the target scope, it is unwrapped.
   # Both cases even work if the object is encapsulated by another object.
   #
   # In all other cases the following rules apply:
