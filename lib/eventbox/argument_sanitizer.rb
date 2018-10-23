@@ -192,25 +192,6 @@ class Eventbox
       args.is_a?(Array) ? args.map { |arg| sanitize_value(arg, target_event_loop, name) } : sanitize_value(args, target_event_loop, name)
     end
 
-    def callback_loop(answer_queue)
-      loop do
-        rets = answer_queue.deq
-        case rets
-        when EventLoop::Callback
-          args = rets.args
-          cbres = rets.block.yield(*args)
-
-          if rets.cbresult
-            cbres = sanitize_values(cbres, event_loop)
-            event_loop.external_proc_result(rets.cbresult, cbres)
-          end
-        else
-          answer_queue.close if answer_queue.respond_to?(:close)
-          return rets
-        end
-      end
-    end
-
     public
 
     # Mark an object as to be shared instead of copied.

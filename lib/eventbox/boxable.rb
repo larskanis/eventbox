@@ -78,7 +78,7 @@ class Eventbox
           cb = sanitize_values(cb, @event_loop, name)
           answer_queue = Queue.new
           @event_loop.sync_call(eventbox, name, args, answer_queue, cb)
-          callback_loop(answer_queue)
+          @event_loop.callback_loop(answer_queue)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
@@ -105,7 +105,7 @@ class Eventbox
           cb = sanitize_values(cb, @event_loop, name)
           answer_queue = Queue.new
           @event_loop.yield_call(eventbox, name, args, answer_queue, cb)
-          callback_loop(answer_queue)
+          @event_loop.callback_loop(answer_queue)
         end
       end
       name

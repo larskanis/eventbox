@@ -207,6 +207,25 @@ class Eventbox
       end
     end
 
+    def callback_loop(answer_queue)
+      loop do
+        rets = answer_queue.deq
+        case rets
+        when EventLoop::Callback
+          args = rets.args
+          cbres = rets.block.yield(*args)
+
+          if rets.cbresult
+            cbres = sanitize_values(cbres, self)
+            external_proc_result(rets.cbresult, cbres)
+          end
+        else
+          answer_queue.close if answer_queue.respond_to?(:close)
+          return rets
+        end
+      end
+    end
+
     def thread_finished(thread)
       @mutex.synchronize do
         @action_threads.delete(thread) or raise(ArgumentError, "unknown thread has finished")
