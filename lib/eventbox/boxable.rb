@@ -48,8 +48,8 @@ class Eventbox
             cb.yield(*cbargs)
           end
         else
-          args = sanitize_values(args, @event_loop, name)
-          cb = sanitize_values(cb, @event_loop, name)
+          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
           @event_loop.async_call(eventbox, name, args, cb)
         end
         self
@@ -74,8 +74,8 @@ class Eventbox
             cb.yield(*cbargs)
           end
         else
-          args = sanitize_values(args, @event_loop, name)
-          cb = sanitize_values(cb, @event_loop, name)
+          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
           answer_queue = Queue.new
           @event_loop.sync_call(eventbox, name, args, answer_queue, cb)
           @event_loop.callback_loop(answer_queue)
@@ -101,8 +101,8 @@ class Eventbox
         if @event_loop.internal_thread?
           raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
         else
-          args = sanitize_values(args, @event_loop, name)
-          cb = sanitize_values(cb, @event_loop, name)
+          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
           answer_queue = Queue.new
           @event_loop.yield_call(eventbox, name, args, answer_queue, cb)
           @event_loop.callback_loop(answer_queue)
@@ -185,7 +185,7 @@ class Eventbox
         sandbox.instance_variable_set(:@eventbox, WeakRef.new(self))
         meth = unbound_method.bind(sandbox)
 
-        args = sanitize_values(args, :extern)
+        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
         # Start a new action thread and return an Action instance
         @event_loop._start_action(meth, name, args)
       end

@@ -10,7 +10,6 @@ class Eventbox
   autoload :Timer, "eventbox/timer"
 
   extend Boxable
-  include ArgumentSanitizer
 
   class InvalidAccess < RuntimeError; end
   class MultipleResults < RuntimeError; end
@@ -171,6 +170,19 @@ class Eventbox
     @event_loop.new_yield_proc(name=nil, &block)
   end
 
+  # Mark an object as to be shared instead of copied.
+  #
+  # A marked object is never passed as copy, but passed as reference.
+  # The object is therefore wrapped as {InternalObject} or {ExternalObject} when used in an unsafe scope.
+  # Wrapping as {InternalObject} or {ExternalObject} denies access from external scope to internal objects and vice versa.
+  # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
+  # It can therefore be used to modify the original object even after traversing the boundary.
+  #
+  # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
+  public def shared_object(object)
+    event_loop.shared_object(object)
+  end
+
   # Force stop of all action threads spawned by this {Eventbox} instance
   #
   # Cleanup of threads will be done through the garbage collector otherwise.
@@ -207,7 +219,6 @@ class Eventbox
   #     puts "well-rested"
   #   end
   class Action
-    include ArgumentSanitizer
     attr_reader :name
 
     def initialize(name, thread, event_loop)
@@ -232,7 +243,7 @@ class Eventbox
       end
 
       if @event_loop.internal_thread?
-        args = sanitize_values(args, :extern)
+        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
       end
       @thread.raise(*args)
     end

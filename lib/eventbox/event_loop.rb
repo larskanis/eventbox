@@ -6,8 +6,6 @@ class Eventbox
   #
   # All methods prefixed with "_" requires @mutex acquired to be called.
   class EventLoop
-    include ArgumentSanitizer
-
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
       @action_threads = []
@@ -29,11 +27,6 @@ class Eventbox
         else
           raise ArgumentError, "guard_time should be Numeric, Proc or nil"
       end
-    end
-
-    # Used in ArgumentSanitizer
-    def event_loop
-      self
     end
 
     # Abort all running action threads.
@@ -86,7 +79,7 @@ class Eventbox
     def sync_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
         res = box.send("__#{name}__", *args, &block)
-        res = sanitize_values(res, :extern)
+        res = ArgumentSanitizer.sanitize_values(res, self, :extern)
         answer_queue << res
       end
     end
@@ -108,7 +101,7 @@ class Eventbox
     def sync_proc_call(pr, args, answer_queue)
       with_call_frame(SyncProc, answer_queue) do
         res = pr.yield(*args)
-        res = sanitize_values(res, :extern)
+        res = ArgumentSanitizer.sanitize_values(res, self, :extern)
         answer_queue << res
       end
     end
@@ -135,7 +128,7 @@ class Eventbox
           block.yield(*args)
         else
           # called externally
-          args = sanitize_values(args, self)
+          args = ArgumentSanitizer.sanitize_values(args, self, self)
           async_proc_call(block, args)
         end
       end
@@ -150,7 +143,7 @@ class Eventbox
         else
           # called externally
           answer_queue = Queue.new
-          args = sanitize_values(args, self)
+          args = ArgumentSanitizer.sanitize_values(args, self, self)
           sync_proc_call(block, args, answer_queue)
           callback_loop(answer_queue)
         end
@@ -166,7 +159,7 @@ class Eventbox
         else
           # called externally
           answer_queue = Queue.new
-          args = sanitize_values(args, self)
+          args = ArgumentSanitizer.sanitize_values(args, self, self)
           yield_proc_call(block, args, answer_queue)
           callback_loop(answer_queue)
         end
@@ -183,8 +176,8 @@ class Eventbox
             raise MultipleResults, "received multiple results for method `#{name}'"
           end
         end
-        resu = return_args(resu)
-        resu = sanitize_values(resu, :extern)
+        resu = ArgumentSanitizer.return_args(resu)
+        resu = ArgumentSanitizer.sanitize_values(resu, self, :extern)
         answer_queue << resu
         result_yielded = true
       end
@@ -216,7 +209,7 @@ class Eventbox
           cbres = rets.block.yield(*args)
 
           if rets.cbresult
-            cbres = sanitize_values(cbres, self)
+            cbres = ArgumentSanitizer.sanitize_values(cbres, self, self)
             external_proc_result(rets.cbresult, cbres)
           end
         else
@@ -224,6 +217,16 @@ class Eventbox
           return rets
         end
       end
+    end
+
+    # Mark an object as to be shared instead of copied.
+    def shared_object(object)
+      if internal_thread?
+        ObjectRegistry.set_tag(object, self)
+      else
+        ObjectRegistry.set_tag(object, ExternalSharedObject)
+      end
+      object
     end
 
     def thread_finished(thread)
@@ -237,7 +240,7 @@ class Eventbox
 
     def _external_proc_call(block, name, cbargs, cbresult)
       if @latest_answer_queue
-        @latest_answer_queue << Callback.new(block, sanitize_values(cbargs, :extern), cbresult)
+        @latest_answer_queue << Callback.new(block, ArgumentSanitizer.sanitize_values(cbargs, self, :extern), cbresult)
       elsif @latest_call_name
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else
