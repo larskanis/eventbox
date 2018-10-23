@@ -18,6 +18,7 @@ class Eventbox
   #   MyBox.new.hello   # prints "hello!"
   #
   module Boxable
+    # @private
     private def with_block_or_def(name, block, &cexec)
       if block
         define_method(name, &cexec)
@@ -89,6 +90,7 @@ class Eventbox
     #
     # The created method can be safely called from any external thread.
     # However yield calls can't be invoked internally (since deferred results require non-sequential program execution).
+    # Insofar they also can not be called by +super+.
     #
     # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
     # Instead the method is called with one additional argument internally, which is used to yield a result value.

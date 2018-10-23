@@ -36,10 +36,10 @@ class Eventbox
   # @param guard_time Internal methods should not do blocking operations.
   #   Eventbox measures the time of each call to internal methods and warns, when it is exceeded.
   #   There are several ways to configure guard_time:
-  #   Set to +nil+: Disable measuring of time to process internal methods.
-  #   Set to a +Numeric+ value: Maximum number of seconds allowed for internal methods.
-  #   Set to a +Proc+ object: Called after each call to an internal method.
-  #   The +Proc+ object is called with the number of seconds the call took as first and the name as second argument.
+  #   * Set to +nil+: Disable measuring of time to process internal methods.
+  #   * Set to a +Numeric+ value: Maximum number of seconds allowed for internal methods.
+  #   * Set to a +Proc+ object: Called after each call to an internal method.
+  #     The +Proc+ object is called with the number of seconds the call took as first and the name as second argument.
   def self.with_options(**options)
     Class.new(self) do
       define_singleton_method(:eventbox_options) do
@@ -58,6 +58,8 @@ class Eventbox
 
   private
 
+  # @private
+  #
   # Create a new {Eventbox} instance.
   #
   # All arguments are passed to the init() method when defined.
@@ -123,9 +125,14 @@ class Eventbox
 
   private
 
-  # This method is executed for initialization of a Eventbox instance.
+  # Initialize a new {Eventbox} instance.
   #
-  # It can be used like +initialize+ in ordinary ruby classes.
+  # This method is executed for initialization of a Eventbox instance.
+  # This method receives all arguments given to +Eventbox.new+ after they have passed the {ArgumentSanitizer}.
+  # It can be used like +initialize+ in ordinary ruby classes including +super+ to initialize included modules or base classes.
+  #
+  # {init} can be defined as either {sync_call} or {async_call} with no difference.
+  # {init} can also be defined as {yield_call}, but please note that it is not possible to call a yield_call method by +super+.
   def init(*args)
   end
 

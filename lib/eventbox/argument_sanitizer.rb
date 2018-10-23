@@ -266,5 +266,6 @@ class Eventbox
     end
   end
 
+  # @private
   ExternalSharedObject = IO.pipe.first
 end
