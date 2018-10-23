@@ -250,8 +250,20 @@ class Eventbox
 
   # Wrapper for Proc objects created external of some Eventbox instance.
   #
-  # External Proc objects can not be called from internal methods.
-  # Instead they can be passed through to actions or to extern to be called there.
+  # External Proc objects can be invoked from internal {Eventbox.sync_call} and {Eventbox.yield_call} methods.
+  # Optionally a proc can be provided as the last argument.
+  # This proc is invoked, when the call has finished, with the result value as argument.
+  #
+  #   class Callback < Eventbox
+  #     sync_call def init(&block)
+  #       block.call(5, proc do |res|  # invoke the block given to Callback.new
+  #         p res                      # print the block result (5 + 1)
+  #       end)
+  #     end
+  #   end
+  #   Callback.new {|num| num + 1 }    # Output: 6
+  #
+  # External Proc objects can also be passed to actions or to extern.
   # In this case a {ExternalProc} is unwrapped back to an ordinary Proc object.
   class ExternalProc < WrappedProc
     attr_reader :name

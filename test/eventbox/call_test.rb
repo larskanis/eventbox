@@ -249,9 +249,9 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, result)
-        pr.call(5) do |res|
+        pr.call(5, proc do |res|
           result.yield res
-        end
+        end)
       end
     end.new
 
@@ -354,9 +354,9 @@ class EventboxCallTest < Minitest::Test
       end
 
       yield_call def call_block(result)
-        @block.yield(@str+"c") do |cbstr|
+        @block.yield(@str+"c", proc do |cbstr|
           result.yield(cbstr+"e")
-        end
+        end)
       end
     end.new
 
@@ -375,9 +375,9 @@ class EventboxCallTest < Minitest::Test
       end
 
       sync_call def call_block(&block)
-        @block.yield(@str+"c") do |cbstr|
+        @block.yield(@str+"c", proc do |cbstr|
           @str = cbstr+"e"
-        end
+        end)
         123
       end
 
@@ -463,9 +463,9 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def callback(str, result, &block)
         if block
-          block.yield(str+"d") do |str2|
+          block.yield(str+"d", proc do |str2|
             result.yield str2+"c"
-          end
+          end)
         else
           result.yield str+"b"
         end
@@ -497,9 +497,9 @@ class EventboxCallTest < Minitest::Test
       end
 
       yield_call def call_back(block, str, result)
-        block.yield(str+"d") do |cbstr|
+        block.yield(str+"d", proc do |cbstr|
           result.yield(cbstr+"f")
-        end
+        end)
       end
 
       async_call def finish(result, str)

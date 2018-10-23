@@ -187,9 +187,11 @@ class Eventbox
       if internal_thread?
         InternalObject.new(arg, self, name)
       else
-        ExternalProc.new(arg, self, name) do |*args, &block|
+        ExternalProc.new(arg, self, name) do |*args, &cbblock|
           if internal_thread?
             # called internally
+            raise InvalidAccess, "calling #{arg.inspect} with block argument is not supported" if cbblock
+            block = args.last if Proc === args.last
             _external_proc_call(arg, name, args, block)
           else
             # called externally
