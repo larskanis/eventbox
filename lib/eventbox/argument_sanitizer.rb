@@ -239,7 +239,7 @@ class Eventbox
       @object = object
       @event_loop = event_loop
       @name = name
-      @dont_marshal = ExternalSharedObject # protect this object for being marshaled
+      @dont_marshal = ExternalSharedObject # protect self from being marshaled
     end
 
     def inspect
