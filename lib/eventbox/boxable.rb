@@ -41,16 +41,16 @@ class Eventbox
     def async_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        if @event_loop.internal_thread?
+        if @__event_loop__.internal_thread?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
           unbound_method.bind(eventbox).call(*args) do |*cbargs|
             cb.yield(*cbargs)
           end
         else
-          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
-          @event_loop.async_call(eventbox, name, args, cb)
+          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
+          @__event_loop__.async_call(eventbox, name, args, cb)
         end
         self
       end
@@ -69,16 +69,16 @@ class Eventbox
     def sync_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        if @event_loop.internal_thread?
+        if @__event_loop__.internal_thread?
           unbound_method.bind(eventbox).call(*args) do |*cbargs|
             cb.yield(*cbargs)
           end
         else
-          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
+          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
           answer_queue = Queue.new
-          @event_loop.sync_call(eventbox, name, args, answer_queue, cb)
-          @event_loop.callback_loop(answer_queue)
+          @__event_loop__.sync_call(eventbox, name, args, answer_queue, cb)
+          @__event_loop__.callback_loop(answer_queue)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
@@ -98,14 +98,14 @@ class Eventbox
     # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
     def yield_call(name, &block)
       with_block_or_def(name, block) do |*args, &cb|
-        if @event_loop.internal_thread?
+        if @__event_loop__.internal_thread?
           raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
         else
-          args = ArgumentSanitizer.sanitize_values(args, @event_loop, @event_loop, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @event_loop, @event_loop, name)
+          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
           answer_queue = Queue.new
-          @event_loop.yield_call(eventbox, name, args, answer_queue, cb)
-          @event_loop.callback_loop(answer_queue)
+          @__event_loop__.yield_call(eventbox, name, args, answer_queue, cb)
+          @__event_loop__.callback_loop(answer_queue)
         end
       end
       name
@@ -178,16 +178,16 @@ class Eventbox
     def action(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        raise InvalidAccess, "action must be called from the event loop thread" unless @event_loop.internal_thread?
+        raise InvalidAccess, "action must be called from the event loop thread" unless @__event_loop__.internal_thread?
 
         sandbox = self.class.allocate
-        sandbox.instance_variable_set(:@event_loop, @event_loop)
-        sandbox.instance_variable_set(:@eventbox, WeakRef.new(self))
+        sandbox.instance_variable_set(:@__event_loop__, @__event_loop__)
+        sandbox.instance_variable_set(:@__eventbox__, WeakRef.new(self))
         meth = unbound_method.bind(sandbox)
 
-        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
+        args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
         # Start a new action thread and return an Action instance
-        @event_loop._start_action(meth, name, args)
+        @__event_loop__._start_action(meth, name, args)
       end
       unbound_method = self.instance_method("__#{name}__")
       name

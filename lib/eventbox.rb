@@ -64,8 +64,8 @@ class Eventbox
   def initialize(*args, &block)
     options = self.class.eventbox_options
 
-    # TODO Better hide instance variables
-    @eventbox = self
+    # This instance variable is set to self here, but replaced by Boxable#action to a WeakRef
+    @__eventbox__ = self
 
     # Verify that all public methods are properly wrapped and no unsafe methods exist
     # This check is done at the first instanciation only and doesn't slow down subsequently.
@@ -93,8 +93,8 @@ class Eventbox
 
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
-    @event_loop = EventLoop.new(options[:threadpool], options[:guard_time])
-    ObjectSpace.define_finalizer(self, @event_loop.method(:shutdown))
+    @__event_loop__ = EventLoop.new(options[:threadpool], options[:guard_time])
+    ObjectSpace.define_finalizer(self, @__event_loop__.method(:shutdown))
 
     init(*args, &block)
   end
@@ -103,7 +103,7 @@ class Eventbox
   #
   # Used in ArgumentSanitizer
   def event_loop
-    @event_loop
+    @__event_loop__
   end
 
   # @private
@@ -113,7 +113,7 @@ class Eventbox
   # - WeakRef.new(self).__getobj__ within actions.
   # This allows actions to be GC'ed, when the related Eventbox instance is no longer in use.
   def eventbox
-    @eventbox.__getobj__
+    @__eventbox__.__getobj__
   end
 
   # @private
@@ -138,7 +138,7 @@ class Eventbox
   #
   # The block always returns +self+ to the caller.
   def async_proc(name=nil, &block)
-    @event_loop.new_async_proc(name=nil, &block)
+    @__event_loop__.new_async_proc(name=nil, &block)
   end
 
   # Create a Proc object for synchronous calls similar to {sync_call}.
@@ -152,7 +152,7 @@ class Eventbox
   # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync procs can only return immediate values.
   # For deferred results use {yield_proc} instead.
   def sync_proc(name=nil, &block)
-    @event_loop.new_sync_proc(name=nil, &block)
+    @__event_loop__.new_sync_proc(name=nil, &block)
   end
 
   # Create a Proc object for calls with deferred result similar to {yield_call}.
@@ -167,7 +167,7 @@ class Eventbox
   #
   # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
   def yield_proc(name=nil, &block)
-    @event_loop.new_yield_proc(name=nil, &block)
+    @__event_loop__.new_yield_proc(name=nil, &block)
   end
 
   # Mark an object as to be shared instead of copied.
@@ -189,7 +189,7 @@ class Eventbox
   # However in some cases automatic garbage collection doesn't remove all instances due to running action threads.
   # Calling shutdown! when the work of the instance is done, ensures that it is GC'ed in all cases.
   public def shutdown!
-    @event_loop.shutdown
+    @__event_loop__.shutdown
   end
 
   # An Action object is returned by {Eventbox#action} and optionally passed as last argument. It can be used to interrupt the program execution by an exception.
@@ -224,7 +224,7 @@ class Eventbox
     def initialize(name, thread, event_loop)
       @name = name
       @thread = thread
-      @event_loop = event_loop
+      @__event_loop__ = event_loop
     end
 
     attr_reader :event_loop
@@ -242,8 +242,8 @@ class Eventbox
         ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
       end
 
-      if @event_loop.internal_thread?
-        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
+      if @__event_loop__.internal_thread?
+        args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
       end
       @thread.raise(*args)
     end
