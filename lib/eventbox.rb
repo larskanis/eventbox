@@ -224,7 +224,7 @@ class Eventbox
     def initialize(name, thread, event_loop)
       @name = name
       @thread = thread
-      @__event_loop__ = event_loop
+      @event_loop = event_loop
     end
 
     attr_reader :event_loop
@@ -242,8 +242,8 @@ class Eventbox
         ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
       end
 
-      if @__event_loop__.internal_thread?
-        args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
+      if @event_loop.internal_thread?
+        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
       end
       @thread.raise(*args)
     end
