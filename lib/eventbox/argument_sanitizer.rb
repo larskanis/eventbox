@@ -122,9 +122,9 @@ class Eventbox
     def sanitize_value(arg, target_event_loop, name)
       case arg
       when WrappedObject
-        arg.access_allowed?(target_event_loop) ? arg.object(target_event_loop) : arg
+        arg.object_for(target_event_loop)
       when ExternalProc
-        arg.direct_callable?(target_event_loop) ? arg.object(target_event_loop) : arg
+        arg.object_for(target_event_loop)
       when InternalProc, Action # If object is already wrapped -> pass it through
         arg
       when Module # Class or Module definitions are passed through
@@ -251,13 +251,8 @@ class Eventbox
   #
   # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
   class InternalObject < WrappedObject
-    def access_allowed?(target_event_loop=nil)
-      @event_loop.internal_thread?(target_event_loop)
-    end
-
-    def object(target_event_loop=nil)
-      raise InvalidAccess, "access to internal object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed outside of the event loop" unless access_allowed?(target_event_loop)
-      @object
+    def object_for(target_event_loop)
+      @event_loop.internal_thread?(target_event_loop) ? @object : self
     end
   end
 
@@ -265,13 +260,8 @@ class Eventbox
   #
   # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
-    def access_allowed?(target_event_loop=nil)
-      !@event_loop.internal_thread?(target_event_loop)
-    end
-
-    def object(target_event_loop=nil)
-      raise InvalidAccess, "access to external object #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless access_allowed?(target_event_loop)
-      @object
+    def object_for(target_event_loop)
+      @event_loop.internal_thread?(target_event_loop) ? self : @object
     end
   end
 
@@ -308,13 +298,8 @@ class Eventbox
       @name = name
     end
 
-    def direct_callable?(target_event_loop=nil)
-      !@event_loop.internal_thread?(target_event_loop)
-    end
-
-    def object(target_event_loop=nil)
-      raise InvalidAccess, "access to external proc #{@object.inspect} #{"wrapped by #{name} " if name}not allowed in the event loop" unless direct_callable?(target_event_loop)
-      @object
+    def object_for(target_event_loop)
+      @event_loop.internal_thread?(target_event_loop) ? self : @object
     end
   end
 
