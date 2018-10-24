@@ -129,9 +129,6 @@ class Eventbox
           # called externally
           args = ArgumentSanitizer.sanitize_values(args, self, self)
           arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
-          if arg_block && !(WrappedProc === arg_block)
-            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
-          end
           async_proc_call(block, args, arg_block)
         end
         # Ideally async_proc{}.call would return the AsyncProc object to allow stacking like async_proc{}.call.call, but self is bound to the EventLoop object here.
@@ -149,9 +146,6 @@ class Eventbox
           answer_queue = Queue.new
           args = ArgumentSanitizer.sanitize_values(args, self, self)
           arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
-          if arg_block && !(WrappedProc === arg_block)
-            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
-          end
           sync_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
@@ -168,9 +162,6 @@ class Eventbox
           answer_queue = Queue.new
           args = ArgumentSanitizer.sanitize_values(args, self, self)
           arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
-          if arg_block && !(WrappedProc === arg_block)
-            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
-          end
           yield_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
