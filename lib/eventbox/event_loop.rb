@@ -91,25 +91,25 @@ class Eventbox
     end
 
     # Anonymous version of async_call
-    def async_proc_call(pr, args)
+    def async_proc_call(pr, args, arg_block)
       with_call_frame(AsyncProc, nil) do
-        pr.yield(*args)
+        pr.yield(*args, &arg_block)
       end
     end
 
     # Anonymous version of sync_call
-    def sync_proc_call(pr, args, answer_queue)
+    def sync_proc_call(pr, args, arg_block, answer_queue)
       with_call_frame(SyncProc, answer_queue) do
-        res = pr.yield(*args)
+        res = pr.yield(*args, &arg_block)
         res = ArgumentSanitizer.sanitize_values(res, self, :extern)
         answer_queue << res
       end
     end
 
     # Anonymous version of yield_call
-    def yield_proc_call(pr, args, answer_queue)
+    def yield_proc_call(pr, args, arg_block, answer_queue)
       with_call_frame(YieldProc, answer_queue) do
-        pr.yield(*args, _result_proc(answer_queue, pr))
+        pr.yield(*args, _result_proc(answer_queue, pr), &arg_block)
       end
     end
 
@@ -131,6 +131,8 @@ class Eventbox
           args = ArgumentSanitizer.sanitize_values(args, self, self)
           async_proc_call(block, args)
         end
+        # Ideally async_proc{}.call would return the AsyncProc object to allow stacking like async_proc{}.call.call, but self is bound to the EventLoop object here.
+        nil
       end
     end
 

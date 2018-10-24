@@ -273,6 +273,19 @@ class EventboxCallTest < Minitest::Test
     end
   end
 
+  def test_async_proc_called_internally
+    fc = Class.new(Eventbox) do
+      sync_call def go(str)
+        pr = async_proc do |x|
+          @n = x+"c"
+        end
+        [pr.call(str+"b"), @n]
+      end
+    end.new
+
+    assert_equal [nil, "abc"], fc.go("a")
+  end
+
   def test_async_proc_called_externally
     fc = Class.new(Eventbox) do
       sync_call def pr
