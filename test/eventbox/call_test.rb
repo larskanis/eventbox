@@ -421,6 +421,21 @@ class EventboxCallTest < Minitest::Test
     assert_equal 124, pr.call(123)
   end
 
+  def test_yield_proc_called_called_two_times
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        yield_proc do |result|
+          result.yield
+          result.yield
+        end
+      end
+    end.new
+
+    pr = fc.pr
+    err = assert_raises(Eventbox::MultipleResults){ pr.call }
+    assert_match(/received multiple results for #<Proc:/, err.to_s)
+  end
+
   def test_yield_proc_called_externally_with_block
     fc = Class.new(Eventbox) do
       sync_call def pr

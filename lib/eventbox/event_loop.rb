@@ -173,7 +173,7 @@ class Eventbox
       new_async_proc(name) do |*resu|
         if result_yielded
           if Proc === name
-            raise MultipleResults, "received multiple results for #{pr.inspect}"
+            raise MultipleResults, "received multiple results for #{name.inspect}"
           else
             raise MultipleResults, "received multiple results for method `#{name}'"
           end
