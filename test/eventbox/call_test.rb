@@ -233,7 +233,18 @@ class EventboxCallTest < Minitest::Test
     assert_kind_of Eventbox::InternalObject, fc.out
   end
 
-  def test_external_proc_called_internally_without_block
+  def test_external_proc_called_internally_should_return_nil
+    fc = Class.new(Eventbox) do
+      sync_call def go(pr, str)
+        pr.call(str+"b")
+      end
+    end.new
+
+    pr = proc { |n| n+"c" }
+    assert_nil fc.go(pr, "a")
+  end
+
+  def test_external_proc_called_internally_without_completion_block
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
         pr.call(5)
@@ -246,7 +257,34 @@ class EventboxCallTest < Minitest::Test
     assert_equal 5, a
   end
 
-  def test_external_proc_called_internally_with_block
+  def test_external_proc_called_internally_with_sync_block
+    fc = Class.new(Eventbox) do
+      yield_call def go(pr, str, result)
+        pr.call(str+"b", &sync_proc do |r|
+          result.yield(r+"d")
+        end)
+      end
+    end.new
+
+    pr = proc { |n, &block| block.yield(n+"c") }
+    res = fc.go(pr, "a")
+    assert_equal "abcd", res
+  end
+
+  def test_external_proc_called_internally_with_plain_block
+    fc = Class.new(Eventbox) do
+      yield_call def go(pr, result)
+        pr.call do
+        end
+      end
+    end.new
+
+    pr = proc { |n, &block|  }
+    err = assert_raises(Eventbox::InvalidAccess){ fc.go(pr) }
+    assert_match(/with block argument .*#<Proc.* is not allowed/, err.to_s)
+  end
+
+  def test_external_proc_called_internally_with_completion_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, result)
         pr.call(5, proc do |res|
@@ -297,8 +335,38 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     pr = fc.pr
-    pr.call(123)
+    assert_nil pr.call(123)
     assert_equal 124, fc.n
+  end
+
+  def test_async_proc_called_externally_with_block
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        async_proc do |&block|
+          @block = block
+        end
+      end
+      yield_call def n(result)
+        @block.call("a", proc { |r| result.yield(r+"c") })
+      end
+    end.new
+
+    pr = fc.pr
+    assert_nil pr.call { |n| n+"b" }
+    assert_equal "abc", fc.n
+  end
+
+  def test_sync_proc_called_internally
+    fc = Class.new(Eventbox) do
+      sync_call def go(str)
+        pr = sync_proc do |x|
+          x+"c"
+        end
+        pr.call(str+"b")
+      end
+    end.new
+
+    assert_equal "abc", fc.go("a")
   end
 
   def test_sync_proc_called_externally
@@ -314,6 +382,32 @@ class EventboxCallTest < Minitest::Test
     assert_equal 124, pr.call(123)
   end
 
+  def test_sync_proc_called_externally_with_block
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        sync_proc do |n, &block|
+          block.call(n+"b", proc { |r| @n = r+"d" })
+        end
+      end
+      attr_reader :n
+    end.new
+
+    pr = fc.pr
+    assert_nil pr.call("a") { |n| n+"c" }
+    assert_equal "abcd", fc.n
+  end
+
+  def test_yield_proc_called_internally
+    fc = Class.new(Eventbox) do
+      sync_call def go
+        yield_proc { |result| }.call
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess){ fc.go }
+    assert_match(/can not be called internally/, err.to_s)
+  end
+
   def test_yield_proc_called_externally
     fc = Class.new(Eventbox) do
       sync_call def pr
@@ -325,6 +419,19 @@ class EventboxCallTest < Minitest::Test
 
     pr = fc.pr
     assert_equal 124, pr.call(123)
+  end
+
+  def test_yield_proc_called_externally_with_block
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        yield_proc do |n, result, &block|
+          block.call(n+"b", proc { |r| result.yield(r+"d") })
+        end
+      end
+    end.new
+
+    pr = fc.pr
+    assert_equal "abcd", pr.call("a") { |n| n+"c" }
   end
 
   def test_internal_proc_invalid_access

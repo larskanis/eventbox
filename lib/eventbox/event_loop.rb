@@ -121,15 +121,18 @@ class Eventbox
     end
 
     def new_async_proc(name=nil, &block)
-      AsyncProc.new do |*args, &cbblock|
-        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
+      AsyncProc.new do |*args, &arg_block|
         if internal_thread?
           # called internally
-          block.yield(*args)
+          block.yield(*args, &arg_block)
         else
           # called externally
           args = ArgumentSanitizer.sanitize_values(args, self, self)
-          async_proc_call(block, args)
+          arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
+          if arg_block && !(WrappedProc === arg_block)
+            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+          end
+          async_proc_call(block, args, arg_block)
         end
         # Ideally async_proc{}.call would return the AsyncProc object to allow stacking like async_proc{}.call.call, but self is bound to the EventLoop object here.
         nil
@@ -137,24 +140,26 @@ class Eventbox
     end
 
     def new_sync_proc(name=nil, &block)
-      SyncProc.new do |*args, &cbblock|
-        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
+      SyncProc.new do |*args, &arg_block|
         if internal_thread?
           # called internally
-          block.yield(*args)
+          block.yield(*args, &arg_block)
         else
           # called externally
           answer_queue = Queue.new
           args = ArgumentSanitizer.sanitize_values(args, self, self)
-          sync_proc_call(block, args, answer_queue)
+          arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
+          if arg_block && !(WrappedProc === arg_block)
+            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+          end
+          sync_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
       end
     end
 
     def new_yield_proc(name=nil, &block)
-      YieldProc.new do |*args, &cbblock|
-        raise InvalidAccess, "calling #{block.inspect} with block argument is not supported" if cbblock
+      YieldProc.new do |*args, &arg_block|
         if internal_thread?
           # called internally
           raise InvalidAccess, "yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
@@ -162,7 +167,11 @@ class Eventbox
           # called externally
           answer_queue = Queue.new
           args = ArgumentSanitizer.sanitize_values(args, self, self)
-          yield_proc_call(block, args, answer_queue)
+          arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, self)
+          if arg_block && !(WrappedProc === arg_block)
+            raise InvalidAccess, "calling #{block.inspect} with block argument #{arg_block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+          end
+          yield_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
       end
@@ -189,15 +198,17 @@ class Eventbox
       if internal_thread?
         InternalObject.new(arg, self, name)
       else
-        ExternalProc.new(arg, self, name) do |*args, &cbblock|
+        ExternalProc.new(arg, self, name) do |*args, &block|
           if internal_thread?
             # called internally
-            raise InvalidAccess, "calling #{arg.inspect} with block argument is not supported" if cbblock
-            block = args.last if Proc === args.last
-            _external_proc_call(arg, name, args, block)
+            if block && !(WrappedProc === block)
+              raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+            end
+            cbblock = args.last if Proc === args.last
+            _external_proc_call(arg, name, args, block, cbblock)
           else
             # called externally
-            raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should be unwrapped externally"
+            raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} should have been unwrapped externally"
           end
         end
       end
@@ -208,8 +219,7 @@ class Eventbox
         rets = answer_queue.deq
         case rets
         when EventLoop::Callback
-          args = rets.args
-          cbres = rets.block.yield(*args)
+          cbres = rets.block.yield(*rets.args, &rets.arg_block)
 
           if rets.cbresult
             cbres = ArgumentSanitizer.sanitize_values(cbres, self, self)
@@ -239,11 +249,14 @@ class Eventbox
       end
     end
 
-    Callback = Struct.new :block, :args, :cbresult
+    Callback = Struct.new :block, :args, :arg_block, :cbresult
 
-    def _external_proc_call(block, name, cbargs, cbresult)
+    def _external_proc_call(block, name, args, arg_block, cbresult)
       if @latest_answer_queue
-        @latest_answer_queue << Callback.new(block, ArgumentSanitizer.sanitize_values(cbargs, self, :extern), cbresult)
+        args = ArgumentSanitizer.sanitize_values(args, self, :extern)
+        arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, :extern)
+        @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
+        nil
       elsif @latest_call_name
         raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else
