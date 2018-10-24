@@ -22,7 +22,7 @@ class Eventbox
   def self.eventbox_options
     {
       threadpool: Thread,
-      guard_time: 0.1,
+      guard_time: 0.5,
     }
   end
 
