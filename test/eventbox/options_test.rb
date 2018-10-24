@@ -81,4 +81,10 @@ class EventboxOptionsTest < Minitest::Test
     assert_operator 0.00, :<=, calls[0][0]
     assert_equal :fast, calls[0][1]
   end
+
+  def test_guard_time_invalid
+    assert_raises(ArgumentError) do
+      Class.new(Eventbox.with_options(guard_time: :nil), &FastAndSlow).new
+    end
+  end
 end
