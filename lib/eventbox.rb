@@ -140,7 +140,7 @@ class Eventbox
   #
   # The created object can be safely called from any thread.
   # All block arguments are passed through the {ArgumentSanitizer}.
-  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
+  # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   #
   # The block always returns +nil+ to the caller.
@@ -152,7 +152,7 @@ class Eventbox
   #
   # The created object can be safely called from any thread.
   # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
-  # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
+  # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   #
   # This Proc is simular to {async_proc}, but when the block is invoked, it is executed and it's return value is returned to the caller.
@@ -173,6 +173,8 @@ class Eventbox
   # The external thread calling this proc is suspended until a result is yielded.
   #
   # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
+  # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
+  # Instead use {Eventbox.action} in these cases.
   def yield_proc(name=nil, &block)
     @__event_loop__.new_yield_proc(name=nil, &block)
   end
