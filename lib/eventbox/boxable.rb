@@ -203,4 +203,71 @@ class Eventbox
       name
     end
   end
+
+  # An Action object is returned by {Eventbox#action} and optionally passed as last argument. It can be used to interrupt the program execution by an exception.
+  #
+  # However in contrast to ruby's builtin threads, by default any exceptions sent to the action thread are delayed until a code block is reached which explicit allows interruption.
+  # The only exception which is delivered to the action thread by default is {Eventbox::AbortAction}.
+  # It is raised by {shutdown} and is delivered as soon as a blocking operation is executed.
+  #
+  # An Action object can be used to stop the action while blocking operations.
+  # Make sure, that the `rescue` statement is outside of the block to `handle_interrupt`.
+  # Otherwise it could happen, that the rescuing code is interrupted by the signal.
+  # Sending custom signals to an action works like:
+  #
+  #   class MySignal < Interrupt
+  #   end
+  #
+  #   async_call def init
+  #     a = start_sleep
+  #     a.raise(MySignal)
+  #   end
+  #
+  #   action def start_sleep
+  #     Thread.handle_interrupt(MySignal => :on_blocking) do
+  #       sleep
+  #     end
+  #   rescue MySignal
+  #     puts "well-rested"
+  #   end
+  class Action
+    attr_reader :name
+
+    def initialize(name, thread, event_loop)
+      @name = name
+      @thread = thread
+      @event_loop = event_loop
+    end
+
+    attr_reader :event_loop
+    private :event_loop
+
+    # Send a signal to the running action.
+    #
+    # The signal must be kind of Exception.
+    # See {Action} about asynchronous delivery of signals.
+    #
+    # This method does nothing if the action is already finished.
+    def raise(*args)
+      # ignore raise, if sent from the action thread
+      if AbortAction === args[0] || (Module === args[0] && args[0].ancestors.include?(AbortAction))
+        ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
+      end
+
+      if @event_loop.internal_thread?
+        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
+      end
+      @thread.raise(*args)
+    end
+
+    # Send a AbortAction to the running thread.
+    def abort
+      @thread.raise AbortAction
+    end
+
+    # Belongs the current thread to this action.
+    def current?
+      @thread.respond_to?(:current?) ? @thread.current? : (@thread == Thread.current)
+    end
+  end
 end
