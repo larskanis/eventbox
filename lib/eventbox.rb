@@ -143,7 +143,7 @@ class Eventbox
   # The block itself might not do any blocking calls or extensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   #
-  # The block always returns +self+ to the caller.
+  # The block always returns +nil+ to the caller.
   def async_proc(name=nil, &block)
     @__event_loop__.new_async_proc(name=nil, &block)
   end
