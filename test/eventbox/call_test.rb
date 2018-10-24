@@ -495,7 +495,7 @@ class EventboxCallTest < Minitest::Test
     assert_equal [45, pr], fc.many(44, pr)
   end
 
-  def test_async_proc_called_externally_denies_callback
+  def test_async_call_denies_callback
     fc = Class.new(Eventbox) do
       async_call def init(&block)
         @bl = block
