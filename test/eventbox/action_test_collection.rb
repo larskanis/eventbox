@@ -223,28 +223,6 @@ def test_results_yielded_in_action
   assert_equal 2, th2.value
 end
 
-def test_action_from_wrong_thread
-  eb = Class.new(Eventbox) do
-    sync_call def init
-      @error = Thread.new do
-        begin
-          dummy
-        rescue => err
-          err.inspect
-        end
-      end.value
-    end
-
-    action def dummy
-    end
-
-    attr_reader :error
-  end.new
-
-  assert_match(/Eventbox::InvalidAccess/, eb.error)
-  assert_match(/action must be called from/, eb.error)
-end
-
 def test_action_overwrites_local_variables
   fc = Class.new(Eventbox) do
     attr_accessor :outside_block
@@ -478,6 +456,22 @@ def test_action_can_call_methods_from_sub_class
   end.new
 
   assert_equal "a", eb.go
+end
+
+def test_action_call_in_action
+  eb = Class.new(Eventbox) do
+    yield_call def go(str, result)
+      action1(str+"b", result)
+    end
+    action def action1(str, result)
+      action2(str+"c", result)
+    end
+    action def action2(str, result)
+      result.yield str+"d"
+    end
+  end.new
+
+  assert_equal "abcd", eb.go("a")
 end
 
 class TestInitWithPendingAction < Eventbox

@@ -186,14 +186,16 @@ class Eventbox
     def action(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        raise InvalidAccess, "action must be called from the event loop thread" unless @__event_loop__.internal_thread?
+        raise InvalidAccess, "action must not be called with a block" if cb
 
         sandbox = self.class.allocate
         sandbox.instance_variable_set(:@__event_loop__, @__event_loop__)
         sandbox.instance_variable_set(:@__eventbox__, WeakRef.new(self))
         meth = unbound_method.bind(sandbox)
 
-        args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
+        if @__event_loop__.internal_thread?
+          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
+        end
         # Start a new action thread and return an Action instance
         @__event_loop__._start_action(meth, name, args)
       end
