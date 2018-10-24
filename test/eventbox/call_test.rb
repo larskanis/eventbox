@@ -339,7 +339,7 @@ class EventboxCallTest < Minitest::Test
     assert_equal 124, fc.n
   end
 
-  def test_async_proc_called_externally_with_block
+  def test_async_proc_called_externally_with_completion_block
     fc = Class.new(Eventbox) do
       sync_call def pr
         async_proc do |&block|
@@ -396,7 +396,7 @@ class EventboxCallTest < Minitest::Test
     assert_match(/closure was yielded by `Eventbox::AsyncProc'/, err.to_s)
   end
 
-  def test_sync_proc_called_externally_with_block
+  def test_sync_proc_called_externally_with_completion_block
     fc = Class.new(Eventbox) do
       sync_call def pr
         sync_proc do |n, &block|
@@ -450,7 +450,7 @@ class EventboxCallTest < Minitest::Test
     assert_match(/received multiple results for #<Proc:/, err.to_s)
   end
 
-  def test_yield_proc_called_externally_with_block
+  def test_yield_proc_called_externally_with_completion_block
     fc = Class.new(Eventbox) do
       sync_call def pr
         yield_proc do |n, result, &block|
