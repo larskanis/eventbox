@@ -6,13 +6,13 @@ class EventboxOptionsTest < Minitest::Test
   end
 
   def test_default_options
-    assert_equal({threadpool: Thread, guard_time: 0.1}, Eventbox.eventbox_options)
+    assert_equal({threadpool: Thread, guard_time: 0.5}, Eventbox.eventbox_options)
   end
 
   def test_with_options
     kl = TestBox.with_options(threadpool: Thread).with_options(www: 1)
-    assert_equal "EventboxOptionsTest::TestBox{:threadpool=>Thread, :guard_time=>0.1, :www=>1}", kl.inspect
-    assert_equal({threadpool: Thread, guard_time: 0.1, www: 1}, kl.eventbox_options)
+    assert_equal "EventboxOptionsTest::TestBox{:threadpool=>Thread, :guard_time=>0.5, :www=>1}", kl.inspect
+    assert_equal({threadpool: Thread, guard_time: 0.5, www: 1}, kl.eventbox_options)
   end
 
   def test_threadpool_option
