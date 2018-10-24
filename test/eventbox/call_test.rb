@@ -382,6 +382,20 @@ class EventboxCallTest < Minitest::Test
     assert_equal 124, pr.call(123)
   end
 
+  def test_async_proc_called_externally_denies_callback
+    fc = Class.new(Eventbox) do
+      sync_call def pr
+        async_proc do |&block|
+          block.call
+        end
+      end
+    end.new
+
+    pr = fc.pr
+    err = assert_raises(Eventbox::InvalidAccess){ pr.call { } }
+    assert_match(/closure was yielded by `Eventbox::AsyncProc'/, err.to_s)
+  end
+
   def test_sync_proc_called_externally_with_block
     fc = Class.new(Eventbox) do
       sync_call def pr
@@ -479,6 +493,20 @@ class EventboxCallTest < Minitest::Test
     assert_nil fc.zero
     assert_equal 23, fc.one(22)
     assert_equal [45, pr], fc.many(44, pr)
+  end
+
+  def test_async_proc_called_externally_denies_callback
+    fc = Class.new(Eventbox) do
+      async_call def init(&block)
+        @bl = block
+      end
+      async_call def go
+        @bl.yield
+      end
+    end.new { }
+
+    err = assert_raises(Eventbox::InvalidAccess){ fc.go }
+    assert_match(/closure defined by `init' was yielded by `go'/, err.to_s)
   end
 
   def test_external_async_call_with_deferred_callback

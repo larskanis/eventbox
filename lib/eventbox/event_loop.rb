@@ -248,10 +248,8 @@ class Eventbox
         arg_block = ArgumentSanitizer.sanitize_values(arg_block, self, :extern)
         @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
         nil
-      elsif @latest_call_name
-        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       else
-        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by some event but should have been by a sync_call or yield_call")
+        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
       end
     end
 
