@@ -112,7 +112,7 @@ class EventboxCallTest < Minitest::Test
       end
 
       yield_call def doit(result)
-        result.yield
+        # never reached
       end
     end.new
 
@@ -569,9 +569,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new
 
-    res = fc.go("a") do |str|
-      str + "d"
-    end
+    res = fc.go("a")
 
     assert_equal "abcde", res
   end
@@ -592,9 +590,7 @@ class EventboxCallTest < Minitest::Test
       attr_reader :call_res
     end.new
 
-    res = fc.go("a") do |str|
-      str + "d"
-    end
+    res = fc.go("a")
 
     assert_equal "abcde", res
     assert_equal "abcdf", fc.call_res
