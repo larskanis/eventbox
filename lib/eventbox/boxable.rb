@@ -269,5 +269,10 @@ class Eventbox
     def current?
       @thread.respond_to?(:current?) ? @thread.current? : (@thread == Thread.current)
     end
+
+    # @private
+    def join
+      @thread.join
+    end
   end
 end

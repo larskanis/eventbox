@@ -43,8 +43,8 @@ class Eventbox
       end
     end
 
-    Request = Struct.new :block, :rid, :signals
-    Running = Struct.new :block, :rid, :action
+    Request = Struct.new :block, :rid, :joins, :signals
+    Running = Struct.new :rid, :joins, :action
 
     async_call def init(pool_size, run_gc_when_busy: false)
       @jobless = []
@@ -68,11 +68,13 @@ class Eventbox
             bl.yield
           end
         rescue AbortAction
+        ensure
+          action_finished(aid)
         end
       end
     end
 
-    protected yield_call def next_job(aid, result)
+    private yield_call def next_job(aid, result)
       if @requests.empty?
         @jobless << [aid, result]
       else
@@ -86,15 +88,20 @@ class Eventbox
           ac.raise(*sig)
         end
 
-        @running[aid] = Running.new(req.block, req.rid, ac)
+        @running[aid] = Running.new(req.rid, req.joins, ac)
       end
+    end
+
+    private async_call def action_finished(aid)
+      @running[aid].joins.each(&:call)
+      @running[aid] = Running.new
     end
 
     sync_call def new(&block)
       @rid += 1
       if @jobless.empty?
         # No free thread -> enqueue the request
-        @requests << Request.new(block, @rid, [])
+        @requests << Request.new(block, @rid, [], [])
 
         # Try to release some actions by the GC
         if @run_gc_when_busy
@@ -105,7 +112,7 @@ class Eventbox
         # Immediately start the block
         aid, result = @jobless.shift
         result.yield(block)
-        @running[aid] = Running.new(block, @rid, @actions[aid])
+        @running[aid] = Running.new(@rid, [], @actions[aid])
       end
 
       PoolThread.new(@rid, self)
@@ -126,6 +133,13 @@ class Eventbox
         run.action.current?
       else
         false
+      end
+    end
+
+    yield_call def join(rid, result)
+      run_or_req = @running.find{|r| r.rid == rid }  || @requests.find{|r| r.rid == rid }
+      if run_or_req
+        run_or_req.joins << result
       end
     end
 

@@ -489,6 +489,16 @@ class TestInitWithPendingAction < Eventbox
     # until GC destroys the Eventbox instance
     #    result.yield
   end
+
+  async_call def shutdown_nonblocking
+    shutdown!
+  end
+
+  yield_call def shutdown_blocking(result)
+    shutdown! do
+      result.yield
+    end
+  end
 end
 
 def test_100_init_with_pending_action
@@ -521,4 +531,22 @@ def test_several_instances_running_actions_dont_interfere
       ec.new
     end
   end.each(&:join)
+end
+
+def test_shutdown_external
+  eb = TestInitWithPendingAction.new
+  eb.shutdown!
+  eb.shutdown!
+end
+
+def test_shutdown_internal_nonblocking
+  eb = TestInitWithPendingAction.new
+  eb.shutdown_nonblocking
+  eb.shutdown_nonblocking
+end
+
+def test_shutdown_internal_blocking
+  eb = TestInitWithPendingAction.new
+  eb.shutdown_blocking
+  eb.shutdown_blocking
 end

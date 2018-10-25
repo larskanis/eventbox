@@ -96,7 +96,7 @@ class Eventbox
     # Run the processing of calls (the event loop) in a separate class.
     # Otherwise it would block GC'ing of self.
     @__event_loop__ = EventLoop.new(options[:threadpool], options[:guard_time])
-    ObjectSpace.define_finalizer(self, @__event_loop__.method(:shutdown))
+    ObjectSpace.define_finalizer(self, @__event_loop__.method(:send_shutdown))
 
     init(*args, &block)
   end
@@ -197,7 +197,13 @@ class Eventbox
   # Cleanup of threads will be done through the garbage collector otherwise.
   # However in some cases automatic garbage collection doesn't remove all instances due to running action threads.
   # Calling shutdown! when the work of the instance is done, ensures that it is GC'ed in all cases.
-  public def shutdown!
-    @__event_loop__.shutdown
+  #
+  # If {shutdown!} is called externally, it blocks until all actions threads terminated.
+  #
+  # If {shutdown!} is called internally, it just triggers the termination of all action threads and returns afterwards.
+  # Optionally {shutdown!} can be called with a block.
+  # It is called when all actions threads terminated.
+  public def shutdown!(&completion_block)
+    @__event_loop__.shutdown(&completion_block)
   end
 end

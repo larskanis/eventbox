@@ -30,7 +30,7 @@ class Eventbox
     end
 
     # Abort all running action threads.
-    def shutdown(object_id=nil)
+    def send_shutdown(object_id=nil)
 #       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:object_id).join(",")}"
 
       # The finalizer doesn't allow suspension per Mutex, so that we access a read-only copy of @action_threads.
@@ -41,6 +41,23 @@ class Eventbox
       @action_threads_for_gc.each(&:abort)
 
       nil
+    end
+
+    def shutdown(&completion_block)
+      send_shutdown
+      if internal_thread?
+        if completion_block
+          completion_block = new_async_proc(&completion_block)
+
+          @threadpool.new do
+            @action_threads_for_gc.each(&:join)
+            completion_block.call
+          end
+        end
+      else
+        raise InvalidAccess, "external shutdown call doesn't take a block but blocks until threads have terminated" if completion_block
+        @action_threads_for_gc.each(&:join)
+      end
     end
 
     # Make a copy of the thread list for use in shutdown.
@@ -300,7 +317,10 @@ class Eventbox
       end
 
       # @shutdown is set without a lock, so that we need to re-check, if it was set while start_action
-      a.abort if @shutdown
+      if @shutdown
+        a.abort
+        a.join
+      end
 
       a
     end

@@ -15,7 +15,6 @@ class EventboxActionTest < Minitest::Test
 
     eb.shutdown!
 
-    sleep 0.01
     c3 = Thread.list.length
     assert_equal c1, c3, "The new thread should be removed"
   end
