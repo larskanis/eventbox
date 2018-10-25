@@ -1,6 +1,5 @@
 require "net/https"
 require "open-uri"
-# require "pp"
 require_relative "../test_helper"
 
 class ExamplesDownloadsTest < Minitest::Test
@@ -16,7 +15,7 @@ class ExamplesDownloadsTest < Minitest::Test
 
     private action def start_download(url)
       data = OpenURI.open_uri(url).read(100).each_line.first
-    rescue SocketError => err
+    rescue => err
       download_finished(url, err)
     else
       download_finished(url, data)
@@ -42,6 +41,7 @@ class ExamplesDownloadsTest < Minitest::Test
     ]
 
     d = ParallelDownloads.new(urls)
+#     require "pp"
 #     pp d.downloads
 
     dls = d.downloads.sort_by{|k,v| k }
