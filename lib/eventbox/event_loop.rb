@@ -183,7 +183,20 @@ class Eventbox
       YieldProc.new do |*args, &arg_block|
         if internal_thread?
           # called internally
-          raise InvalidAccess, "yield_proc #{block.inspect} #{"wrapped by #{name} " if name} can not be called internally - use sync_proc or async_proc instead"
+          complete = args.last
+          unless Proc === complete
+            raise InvalidAccess, "yield_proc #{block.inspect} must be called with a Proc object internally but got #{complete.class}"
+          end
+          args[-1] = proc do |*cargs, &cblock|
+            unless complete
+              raise MultipleResults, "received multiple results for #{block.inspect}"
+            end
+            res = complete.yield(*cargs, &cblock)
+            complete = nil
+            res
+          end
+
+          block.yield(*args, &arg_block)
         else
           # called externally
           answer_queue = Queue.new

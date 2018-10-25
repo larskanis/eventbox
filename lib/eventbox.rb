@@ -132,7 +132,7 @@ class Eventbox
   # It can be used like +initialize+ in ordinary ruby classes including +super+ to initialize included modules or base classes.
   #
   # {init} can be defined as either {sync_call} or {async_call} with no difference.
-  # {init} can also be defined as {yield_call}, but please note that it is not possible to call a yield_call method by +super+.
+  # {init} can also be defined as {yield_call}, so that the +new+ call is blocked until the result is yielded.
   def init(*args)
   end
 
@@ -164,13 +164,14 @@ class Eventbox
 
   # Create a Proc object for calls with deferred result similar to {yield_call}.
   #
-  # The created object can be safely called from any external thread.
-  # However yield procs can't be invoked internally (since deferred results require non-sequential program execution).
-  #
   # This proc type is simular to {sync_proc}, however it's not the result of the block that is returned.
   # Instead the block is called with one additional argument internally, which is used to yield a result value.
   # The result value can be yielded within the called block, but it can also be called by any other internal or external method, leading to a deferred proc return.
   # The external thread calling this proc is suspended until a result is yielded.
+  #
+  # The created object can be safely called from any thread.
+  # If yield procs are called internally, they must get a Proc object as the last argument.
+  # It is called when a result was yielded.
   #
   # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
   # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.

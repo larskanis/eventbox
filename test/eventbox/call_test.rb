@@ -103,20 +103,60 @@ class EventboxCallTest < Minitest::Test
     assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
 
-  def test_intern_yield_call_fails
+  class InternalCall < Eventbox
+    yield_call def go(meth, result)
+      send(meth, result) do
+        123
+      end
+    end
+
+    async_call def async(result, &block)
+      result.yield block.call + 1
+    end
+    sync_call def sync(result, &block)
+      result.yield block.call + 1
+    end
+    yield_call def yield(result, &block)
+      result.yield block.call + 1
+    end
+  end
+
+  def test_intern_async_call
+    assert_equal 124, InternalCall.new.go(:async)
+  end
+  def test_intern_sync_call
+    assert_equal 124, InternalCall.new.go(:sync)
+  end
+  def test_intern_yield_call
+    assert_equal 124, InternalCall.new.go(:yield)
+  end
+
+  def test_intern_yield_call_with_multiple_yields
     eb = Class.new(Eventbox) do
-      sync_call def go
-        doit
-      rescue => err
-        err.to_s
+      sync_call def init
+        y(proc{})
       end
-
-      yield_call def doit(result)
-        # never reached
+      yield_call def y(result)
+        result.yield
+        result.yield
       end
-    end.new
+    end
 
-    assert_match(/`doit' can not be called internally/, eb.go)
+    ex = assert_raises(Eventbox::MultipleResults) { eb.new }
+    assert_match(/multiple results for method `y'/, ex.to_s)
+  end
+
+  def test_intern_yield_call_without_proc
+    eb = Class.new(Eventbox) do
+      sync_call def init
+        y
+      end
+      yield_call def y(result)
+      end
+    end
+
+    ex = assert_raises(Eventbox::InvalidAccess) { eb.new }
+    assert_match(/`y' must be called with a Proc object/, ex.to_s)
   end
 
   def test_extern_yield_call_with_multiple_yields
@@ -413,13 +453,44 @@ class EventboxCallTest < Minitest::Test
 
   def test_yield_proc_called_internally
     fc = Class.new(Eventbox) do
-      sync_call def go
-        yield_proc { |result| }.call
+      yield_call def go(gores)
+        yield_proc do |result, &block|
+          result.yield(block.call + 1)
+        end.call(proc do |res|
+          gores.yield res
+        end) do
+          123
+        end
       end
     end.new
 
-    err = assert_raises(Eventbox::InvalidAccess){ fc.go }
-    assert_match(/can not be called internally/, err.to_s)
+    assert_equal 124, fc.go
+  end
+
+  def test_intern_yield_proc_with_multiple_yields
+    eb = Class.new(Eventbox) do
+      sync_call def init
+        yield_proc do |result|
+          result.yield
+          result.yield
+        end.call(proc{})
+      end
+    end
+
+    ex = assert_raises(Eventbox::MultipleResults) { eb.new }
+    assert_match(/multiple results for #<Proc:/, ex.to_s)
+  end
+
+  def test_intern_yield_proc_without_proc
+    eb = Class.new(Eventbox) do
+      sync_call def init
+        yield_proc do
+        end.call
+      end
+    end
+
+    ex = assert_raises(Eventbox::InvalidAccess) { eb.new }
+    assert_match(/#<Proc:.* must be called with a Proc object/, ex.to_s)
   end
 
   def test_yield_proc_called_externally

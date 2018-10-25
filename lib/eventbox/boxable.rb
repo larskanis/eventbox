@@ -47,9 +47,7 @@ class Eventbox
         if @__event_loop__.internal_thread?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
-          unbound_method.bind(eventbox).call(*args) do |*cbargs|
-            cb.yield(*cbargs)
-          end
+          unbound_method.bind(eventbox).call(*args, &cb)
         else
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
           cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
@@ -75,9 +73,7 @@ class Eventbox
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.internal_thread?
-          unbound_method.bind(eventbox).call(*args) do |*cbargs|
-            cb.yield(*cbargs)
-          end
+          unbound_method.bind(eventbox).call(*args, &cb)
         else
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
           cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
@@ -92,22 +88,36 @@ class Eventbox
 
     # Define a method for calls with deferred result.
     #
-    # The created method can be safely called from any external thread.
-    # However yield calls can't be invoked internally (since deferred results require non-sequential program execution).
-    # Insofar they also can not be called by +super+.
-    #
     # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
     # Instead the method is called with one additional argument internally, which is used to yield a result value.
     # The result value can be yielded within the called method, but it can also be called by any other internal or external method, leading to a deferred method return.
     # The external thread calling this method is suspended until a result is yielded.
     #
+    # The created method can be safely called from any thread.
+    # If yield methods are called internally, they must get a Proc object as the last argument.
+    # It is called when a result was yielded.
+    #
     # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
-    # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
+    # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {Eventbox.action Eventbox.action} in these cases.
     def yield_call(name, &block)
+      unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.internal_thread?
-          raise InvalidAccess, "yield_call `#{name}' can not be called internally - use sync_call or async_call instead"
+          complete = args.last
+          unless Proc === complete
+            raise InvalidAccess, "yield_call `#{name}' must be called with a Proc object internally but got #{complete.class}"
+          end
+          args[-1] = proc do |*cargs, &cblock|
+            unless complete
+              raise MultipleResults, "received multiple results for method `#{name}'"
+            end
+            res = complete.yield(*cargs, &cblock)
+            complete = nil
+            res
+          end
+
+          unbound_method.bind(eventbox).call(*args, &cb)
         else
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
           cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
@@ -116,6 +126,7 @@ class Eventbox
           @__event_loop__.callback_loop(answer_queue)
         end
       end
+      unbound_method = self.instance_method("__#{name}__")
       name
     end
 
