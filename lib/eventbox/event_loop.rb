@@ -183,19 +183,7 @@ class Eventbox
       YieldProc.new do |*args, &arg_block|
         if internal_thread?
           # called internally
-          complete = args.last
-          unless Proc === complete
-            raise InvalidAccess, "yield_proc #{block.inspect} must be called with a Proc object internally but got #{complete.class}"
-          end
-          args[-1] = proc do |*cargs, &cblock|
-            unless complete
-              raise MultipleResults, "received multiple results for #{block.inspect}"
-            end
-            res = complete.yield(*cargs, &cblock)
-            complete = nil
-            res
-          end
-
+          safe_yield_result(args, block)
           block.yield(*args, &arg_block)
         else
           # called externally
@@ -205,6 +193,29 @@ class Eventbox
           yield_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
+      end
+    end
+
+    def safe_yield_result(args, name)
+      complete = args.last
+      unless Proc === complete
+        if Proc === name
+          raise InvalidAccess, "yield_proc #{name.inspect} must be called with a Proc object internally but got #{complete.class}"
+        else
+          raise InvalidAccess, "yield_call `#{name}' must be called with a Proc object internally but got #{complete.class}"
+        end
+      end
+      args[-1] = proc do |*cargs, &cblock|
+        unless complete
+          if Proc === name
+            raise MultipleResults, "received multiple results for #{name.inspect}"
+          else
+            raise MultipleResults, "received multiple results for method `#{name}'"
+          end
+        end
+        res = complete.yield(*cargs, &cblock)
+        complete = nil
+        res
       end
     end
 

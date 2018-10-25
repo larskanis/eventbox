@@ -104,19 +104,7 @@ class Eventbox
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.internal_thread?
-          complete = args.last
-          unless Proc === complete
-            raise InvalidAccess, "yield_call `#{name}' must be called with a Proc object internally but got #{complete.class}"
-          end
-          args[-1] = proc do |*cargs, &cblock|
-            unless complete
-              raise MultipleResults, "received multiple results for method `#{name}'"
-            end
-            res = complete.yield(*cargs, &cblock)
-            complete = nil
-            res
-          end
-
+          @__event_loop__.safe_yield_result(args, name)
           unbound_method.bind(eventbox).call(*args, &cb)
         else
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
