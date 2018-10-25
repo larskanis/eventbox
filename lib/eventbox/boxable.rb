@@ -197,7 +197,7 @@ class Eventbox
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
         end
         # Start a new action thread and return an Action instance
-        @__event_loop__._start_action(meth, name, args)
+        @__event_loop__.start_action(meth, name, args)
       end
       unbound_method = self.instance_method("__#{name}__")
       name

@@ -54,6 +54,16 @@ class Eventbox
       @mutex.owned?
     end
 
+    def synchronize_external
+      if internal_thread?
+        yield
+      else
+        @mutex.synchronize do
+          yield
+        end
+      end
+    end
+
     def with_call_frame(name, answer_queue)
       @mutex.lock
       begin
@@ -253,7 +263,7 @@ class Eventbox
       end
     end
 
-    def _start_action(meth, name, args)
+    def start_action(meth, name, args)
       qu = Queue.new
 
       new_thread = Thread.handle_interrupt(Exception => :never) do
@@ -284,10 +294,12 @@ class Eventbox
       qu << a << a
 
       # Add to the list of running actions
-      @action_threads << a
-      _update_action_threads_for_gc
+      synchronize_external do
+        @action_threads << a
+        _update_action_threads_for_gc
+      end
 
-      # @shutdown is set without a lock, so that we need to re-check, if it was set while _start_action
+      # @shutdown is set without a lock, so that we need to re-check, if it was set while start_action
       a.abort if @shutdown
 
       a
