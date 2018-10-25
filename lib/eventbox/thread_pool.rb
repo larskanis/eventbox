@@ -20,13 +20,13 @@ class Eventbox
   class ThreadPool < Eventbox
     class AbortAction < RuntimeError; end
 
-    class PoolThread < Eventbox
-      async_call def init(rid, pool)
+    class PoolThread
+      def initialize(rid, pool)
         @rid = rid
         @pool = pool
       end
 
-      async_call def raise(*args)
+      def raise(*args)
         # Eventbox::AbortAction would shutdown the thread pool.
         # To stop the borrowed thread only remap to Eventbox::ThreadPool::AbortAction .
         args[0] = AbortAction if args[0] == Eventbox::AbortAction
@@ -34,8 +34,12 @@ class Eventbox
       end
 
       # Belongs the current thread to this action.
-      sync_call def current?
+      def current?
         @pool.current?(@rid)
+      end
+
+      def join
+        @pool.join(@rid)
       end
     end
 
@@ -51,13 +55,13 @@ class Eventbox
       @run_gc_when_busy = run_gc_when_busy
 
       pool_size.times do |aid|
-        a = pool_thread(aid)
+        a = start_pool_thread(aid)
 
         @actions[aid] = a
       end
     end
 
-    action def pool_thread(aid)
+    action def start_pool_thread(aid)
       while bl=next_job(aid)
         begin
           Thread.handle_interrupt(AbortAction => :on_blocking) do
