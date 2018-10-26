@@ -123,6 +123,8 @@ class Eventbox
 
     def sanitize_value(arg, source_event_loop, target_event_loop, name)
       case arg
+      when NilClass, Numeric, Symbol, TrueClass, FalseClass # Immutable objects
+        arg
       when WrappedObject
         arg.object_for(target_event_loop)
       when ExternalProc
