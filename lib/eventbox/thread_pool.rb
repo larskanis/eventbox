@@ -140,6 +140,9 @@ class Eventbox
       run_or_req = @running.find{|r| r.rid == rid }  || @requests.find{|r| r.rid == rid }
       if run_or_req
         run_or_req.joins << result
+      else
+        # action has already finished
+        result.yield
       end
     end
 
