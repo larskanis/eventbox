@@ -106,6 +106,7 @@ class Eventbox
         if @__event_loop__.internal_thread?
           @__event_loop__.safe_yield_result(args, name)
           unbound_method.bind(eventbox).call(*args, &cb)
+          self
         else
           args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
           cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)

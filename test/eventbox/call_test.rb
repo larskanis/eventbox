@@ -159,6 +159,20 @@ class EventboxCallTest < Minitest::Test
     assert_match(/`y' must be called with a Proc object/, ex.to_s)
   end
 
+  def test_intern_yield_call_results_self
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        y( proc { 5 } )
+      end
+
+      yield_call def y(result)
+        8
+      end
+    end.new
+
+    assert_equal eb, eb.go
+  end
+
   def test_extern_yield_call_with_multiple_yields
     with_report_on_exception(false) do
       eb = Class.new(Eventbox) do
@@ -491,6 +505,18 @@ class EventboxCallTest < Minitest::Test
 
     ex = assert_raises(Eventbox::InvalidAccess) { eb.new }
     assert_match(/#<Proc:.* must be called with a Proc object/, ex.to_s)
+  end
+
+  def test_intern_yield_proc_results_nil
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        yield_proc do |result|
+          8
+        end.call( proc { 5 } )
+      end
+    end.new
+
+    assert_nil eb.go
   end
 
   def test_yield_proc_called_externally

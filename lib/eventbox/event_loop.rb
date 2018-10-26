@@ -185,6 +185,7 @@ class Eventbox
           # called internally
           safe_yield_result(args, block)
           block.yield(*args, &arg_block)
+          nil
         else
           # called externally
           answer_queue = Queue.new
