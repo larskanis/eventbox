@@ -221,9 +221,8 @@ class Eventbox
     end
 
     private def _result_proc(answer_queue, name)
-      result_yielded = false
       new_async_proc(name) do |*resu|
-        if result_yielded
+        unless answer_queue
           if Proc === name
             raise MultipleResults, "received multiple results for #{name.inspect}"
           else
@@ -233,7 +232,7 @@ class Eventbox
         resu = ArgumentSanitizer.return_args(resu)
         resu = ArgumentSanitizer.sanitize_values(resu, self, :extern)
         answer_queue << resu
-        result_yielded = true
+        answer_queue = nil
       end
     end
 
