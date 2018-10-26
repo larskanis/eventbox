@@ -47,3 +47,40 @@ def eval_file(local_file)
   fn = File.expand_path(local_file, __dir__)
   class_eval(File.read(fn, encoding: "UTF-8"), fn)
 end
+
+def with_fake_time
+  time = Time.at(0)
+
+  time_now = proc do
+    time
+  end
+
+  kernel_sleep = proc do |sec=nil|
+    if sec
+      time += sec
+      sleep 0.001
+    else
+      sleep 10
+      raise "sleep not interrupted"
+    end
+  end
+
+  Time.stub(:now, time_now) do
+    Kernel.stub(:sleep, kernel_sleep) do
+      yield
+    end
+  end
+end
+
+def assert_elapsed_time(seconds, delta=0.01)
+  st = Time.now
+  yield
+  dt = Time.now - st
+  assert_in_delta seconds, dt, delta
+end
+
+def assert_elapsed_fake_time(seconds, delta=0.01, &block)
+  with_fake_time do
+    assert_elapsed_time(seconds, delta, &block)
+  end
+end

@@ -10,30 +10,6 @@ class EventboxTimerTest < Minitest::Test
     Time.now - st
   end
 
-  def with_fake_time
-    time = Time.at(0)
-
-    time_now = proc do
-      time
-    end
-
-    kernel_sleep = proc do |sec=nil|
-      if sec
-        time += sec
-        sleep 0.001
-      else
-        sleep 10
-        raise "sleep not interrupted"
-      end
-    end
-
-    Time.stub(:now, time_now) do
-      Kernel.stub(:sleep, kernel_sleep) do
-        yield
-      end
-    end
-  end
-
   def test_delay_init
     eb = Class.new(Eventbox) do
       include Eventbox::Timer

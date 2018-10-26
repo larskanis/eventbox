@@ -19,28 +19,35 @@ class EventboxThreadBoxTest < Minitest::Test
 
   def test_join_in_request
     tp = Eventbox::ThreadPool.new(1)
-    tp.new do
-      sleep 0.01
+    assert_elapsed_fake_time(2) do
+      tp.new do
+        Kernel.sleep 1
+      end
+      th = tp.new do
+        Kernel.sleep 1
+      end
+      th.join
     end
-    th = tp.new do
-    end
-    th.join
   end
 
   def test_join_in_running
     tp = Eventbox::ThreadPool.new(3)
-    th = tp.new do
-      sleep 0.01
+    assert_elapsed_fake_time(1) do
+      th = tp.new do
+        Kernel.sleep 1
+      end
+      Thread.pass
+      th.join
     end
-    Thread.pass
-    th.join
   end
 
   def test_join_after_finished
     tp = Eventbox::ThreadPool.new(3)
-    th = tp.new do
+    assert_elapsed_fake_time(1) do
+      th = tp.new do
+      end
+      Kernel.sleep 1
+      th.join
     end
-    sleep 0.01
-    th.join
   end
 end
