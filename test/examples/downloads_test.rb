@@ -31,13 +31,13 @@ class ExamplesDownloadsTest < Minitest::Test
 
   def test_queue
     urls = %w[
-      http://ruby-lang.org
-      http://aruby-lang.ooorg
-      http://wikipedia.org
-      http://torproject.org
-      http://github.com
-      http://google.com
-      http://leo.org
+      https://aruby-lang.ooorg
+      https://github.com
+      https://google.com
+      https://leo.org
+      https://ruby-lang.org
+      https://torproject.org
+      https://wikipedia.org
     ]
 
     d = ParallelDownloads.new(urls)
