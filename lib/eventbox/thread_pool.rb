@@ -74,13 +74,13 @@ class Eventbox
       end
     end
 
-    private yield_call def next_job(aid, result)
+    private yield_call def next_job(aid, input)
       if @requests.empty?
-        @jobless << [aid, result]
+        @jobless << [aid, input]
       else
         # Take the oldest request and send it to the calling action.
         req = @requests.shift
-        result.yield(req.block)
+        input.yield(req.block)
 
         # Send all accumulated signals to the action thread
         ac = @actions[aid]
@@ -110,8 +110,8 @@ class Eventbox
         end
       else
         # Immediately start the block
-        aid, result = @jobless.shift
-        result.yield(block)
+        aid, input = @jobless.shift
+        input.yield(block)
         @running[aid] = Running.new(@rid, [], @actions[aid])
       end
 
