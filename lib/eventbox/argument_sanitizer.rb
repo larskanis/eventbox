@@ -1,8 +1,9 @@
 class Eventbox
   # Module for argument and result value sanitation.
   #
-  # All call arguments and result values are passed through as either copies or wrapped respectively unwrapped objects.
-  # Certain object types are passed through unchanged.
+  # All call arguments and result values between external and internal an vice versa are passed through the ArgumentSanitizer as either copies or as wrapped respectively unwrapped objects.
+  # Only certain object types are passed through unchanged.
+  # This filter is required to prevent data races through shared objects and to arbitrate between external blocking behaviour and internal event based behaviour.
   #
   # Objects which are passed through unchanged are:
   # * Eventbox, Action and Module objects
