@@ -9,13 +9,17 @@ _Manage multithreading with the safety of event based programming_
 All code inside an {Eventbox} object is executed non-concurrently.
 It must not do any blocking operations.
 All blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Data races between internal and external objects are avoided through filters applied to all inputs and outputs.
+Data races between internal and external objects are avoided through {ArgumentSanitizer filters} applied to all inputs and outputs.
 That way {Eventbox} guarantees stable states without a need for any locks.
+
+For better readability see the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+
 
 ## Requirements
 
 * Ruby-2.3 or newer or
 * JRuby 9.1 or newer
+
 
 ## Installation
 
@@ -33,11 +37,14 @@ Or install it yourself as:
 
     $ gem install eventbox
 
+
 ## Usage
 
-Let's build a simple Queue class:
+Eventbox is an universal approach to build thread safe objects.
+It can therefore for instance be used to build well known mutithread abstractions like a Queue class:
 
 ```ruby
+require "eventbox"
 class Queue < Eventbox
   # Called at Queue.new just like Object#initialize in ordinary ruby classes
   async_call def init
@@ -63,7 +70,7 @@ class Queue < Eventbox
   end
 end
 ```
-It can be used just like ruby's builtin Queue implementation:
+It has semantics like ruby's builtin Queue implementation:
 
 ```ruby
 q = Queue.new
@@ -91,6 +98,77 @@ It divides the single external call into two internal events: The event of the s
 In contrast `async_call` defines a method which handles one event only - the start of the call.
 The external call returns immediately, but can't return a value.
 
+
+### A more realistic example
+
+Let's continue with an example how Eventbox is typically used.
+The following class downloads a list of URLs in parallel.
+
+```ruby
+require "eventbox"
+require "net/https"
+require "open-uri"
+require "pp"
+
+# Build a new Eventbox based class, which makes use of a thread pool of two threads.
+# This way the number of concurrent downloads is limited to 3.
+class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(3))
+
+  # Called at ParallelDownloads.new just like Object#initialize in ordinary ruby classes
+  yield_call def init(urls, result) # yield calls suspend the caller until result.yield
+    @urls = urls
+    @urls.each do |url|             # Start a download thread for each URL
+      start_download(url)           # Start the download - the call returns immediately
+    end
+    # It's safe to set instance variables after start_download
+    @downloads = {}                 # The result hash with all downloads
+    @finished = result              # Don't return to the caller, but store result yielder for later
+  end
+
+  # Each call to an action method starts a new thread
+  # Actions don't have access to instance variables.
+  private action def start_download(url)
+    data = OpenURI.open_uri(url)    # HTTP GET url
+      .read(100).each_line.first    # Retrieve the first line but max 100 bytes
+  rescue SocketError => err         # Catch any network errors
+    download_finished(url, err)     # and store it in the result hash
+  else
+    download_finished(url, data)    # ... or store the retrieved data when successful
+  end
+
+  # Called for each finished download
+  private sync_call def download_finished(url, res)
+    @downloads[url] = res           # Store the download result in the result hash
+    if @downloads.size == @urls.size # All downloads finished?
+      @finished.yield               # Finish ParallelDownloads.new
+    end
+  end
+
+  attr_reader :downloads            # Threadsafe access to @download
+end
+
+urls = %w[
+  http://ruby-lang.org
+  http://ruby-lang.ooorg
+  http://wikipedia.org
+  http://torproject.org
+  http://github.com
+]
+
+d = ParallelDownloads.new(urls)
+pp d.downloads
+```
+
+This returns output like the following.
+The order depends on the particular response time of the URL.
+
+```ruby
+{"http://ruby-lang.ooorg"=>#<SocketError: Failed to open TCP connection to ruby-lang.ooorg:80 (getaddrinfo: Name or service not known)>,
+ "http://wikipedia.org"=>"<!DOCTYPE html>\n",
+ "http://torproject.org"=>"<div class=\"eoy-background\">\n",
+ "http://ruby-lang.org"=>"<!DOCTYPE html>\n",
+ "http://github.com"=>"\n"}
+```
 
 ### Another example: ThreadPool
 
@@ -157,6 +235,7 @@ end
 There are various battle proof implementations of multithreaded primitives, which are probably faster and more feature rich than the above.
 See [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby) for a great collection of threading abstractions.
 
+
 ### When to use Eventbox?
 
 Eventbox comes into action when things are getting more complicated or more customized.
@@ -182,9 +261,11 @@ It also does a lot of safety checks to support the developer.
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/larskanis/eventbox. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
 
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+
 
 ## Code of Conduct
 
