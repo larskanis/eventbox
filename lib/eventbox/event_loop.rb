@@ -331,14 +331,15 @@ class Eventbox
       end
 
       a = Action.new(name, new_thread, self)
-      # Enqueue the action twice (for call and for finish)
-      qu << a << a
 
       # Add to the list of running actions
       synchronize_external do
         @action_threads << a
         _update_action_threads_for_gc
       end
+
+      # Enqueue the action twice (for call and for finish)
+      qu << a << a
 
       # @shutdown is set without a lock, so that we need to re-check, if it was set while start_action
       if @shutdown
