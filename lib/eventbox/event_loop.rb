@@ -8,8 +8,8 @@ class Eventbox
   class EventLoop
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
-      @action_threads = []
-      @action_threads_for_gc = []
+      @running_actions = []
+      @running_actions_for_gc = []
       @mutex = Mutex.new
       @shutdown = false
       @guard_time_proc = case guard_time
@@ -31,14 +31,14 @@ class Eventbox
 
     # Abort all running action threads.
     def send_shutdown(object_id=nil)
-#       warn "shutdown called for object #{object_id} with #{@action_threads.size} threads #{@action_threads.map(&:object_id).join(",")}"
+#       warn "shutdown called for object #{object_id} with #{@running_actions.size} threads #{@running_actions.map(&:object_id).join(",")}"
 
-      # The finalizer doesn't allow suspension per Mutex, so that we access a read-only copy of @action_threads.
+      # The finalizer doesn't allow suspension per Mutex, so that we access a read-only copy of @running_actions.
       # To avoid race conditions with thread creation, set a flag before the loop.
       @shutdown = true
 
       # terminate all running action threads
-      @action_threads_for_gc.each(&:abort)
+      @running_actions_for_gc.each(&:abort)
 
       nil
     end
@@ -50,20 +50,20 @@ class Eventbox
           completion_block = new_async_proc(&completion_block)
 
           @threadpool.new do
-            @action_threads_for_gc.each(&:join)
+            @running_actions_for_gc.each(&:join)
             completion_block.call
           end
         end
       else
         raise InvalidAccess, "external shutdown call doesn't take a block but blocks until threads have terminated" if completion_block
-        @action_threads_for_gc.each(&:join)
+        @running_actions_for_gc.each(&:join)
       end
     end
 
     # Make a copy of the thread list for use in shutdown.
     # The copy is replaced per an atomic operation, so that it can be read lock-free in shutdown.
     def _update_action_threads_for_gc
-      @action_threads_for_gc = @action_threads.dup
+      @running_actions_for_gc = @running_actions.dup
     end
 
     # Is the caller running within the internal context?
@@ -284,9 +284,9 @@ class Eventbox
       object
     end
 
-    def thread_finished(thread)
+    def thread_finished(action)
       @mutex.synchronize do
-        @action_threads.delete(thread) or raise(ArgumentError, "unknown thread has finished")
+        @running_actions.delete(action) or raise(ArgumentError, "unknown action has finished: #{action}")
         _update_action_threads_for_gc
       end
     end
@@ -334,7 +334,7 @@ class Eventbox
 
       # Add to the list of running actions
       synchronize_external do
-        @action_threads << a
+        @running_actions << a
         _update_action_threads_for_gc
       end
 
