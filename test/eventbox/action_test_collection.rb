@@ -70,13 +70,8 @@ class FcPipe < Eventbox
   end
 
   private def pipe_active
-    if @inp
-      read_pipe(@inp)
-    end
-
-    if @out
-      write_pipe(@out)
-    end
+    read_pipe(@inp)
+    write_pipe(@out)
   end
 
   action def read_pipe inp
