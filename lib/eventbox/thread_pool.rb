@@ -76,7 +76,7 @@ class Eventbox
         while Thread.pending_interrupt?
           begin
             Thread.handle_interrupt(Exception => :immediate) do
-              sleep 0.001
+              sleep # Aborted by the exception
             end
           rescue Exception
           end
