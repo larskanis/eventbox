@@ -44,6 +44,7 @@ class Eventbox
     def async_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
+        raise InvalidAccess, "method `initialize' at #{method(:initialize).source_location.join(":")} must not be overwritten - use `init' instead" unless @__event_loop__
         if @__event_loop__.internal_thread?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
@@ -72,6 +73,7 @@ class Eventbox
     def sync_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
+        raise InvalidAccess, "method `initialize' at #{method(:initialize).source_location.join(":")} must not be overwritten - use `init' instead" unless @__event_loop__
         if @__event_loop__.internal_thread?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
@@ -103,6 +105,7 @@ class Eventbox
     def yield_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
+        raise InvalidAccess, "method `initialize' at #{method(:initialize).source_location.join(":")} must not be overwritten - use `init' instead" unless @__event_loop__
         if @__event_loop__.internal_thread?
           @__event_loop__.safe_yield_result(args, name)
           unbound_method.bind(eventbox).call(*args, &cb)

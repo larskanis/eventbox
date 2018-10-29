@@ -32,7 +32,7 @@ class EventboxCallTest < Minitest::Test
     assert_match(/method `test' at/, err.to_s)
   end
 
-  def test_initialize_method_error
+  def test_initialize_method_error_with_super
     err = assert_raises(Eventbox::InvalidAccess) do
       Class.new(Eventbox) do
         def initialize
@@ -40,6 +40,25 @@ class EventboxCallTest < Minitest::Test
         end
       end.new
     end
+    assert_match(/method `initialize' at/, err.to_s)
+  end
+
+  def test_initialize_method_error_without_super
+    eb = Class.new(Eventbox) do
+      def initialize
+      end
+      async_call def a
+      end
+      sync_call def s
+      end
+      yield_call def y(result)
+      end
+    end.new
+    err = assert_raises(Eventbox::InvalidAccess) { eb.a }
+    assert_match(/method `initialize' at/, err.to_s)
+    err = assert_raises(Eventbox::InvalidAccess) { eb.s }
+    assert_match(/method `initialize' at/, err.to_s)
+    err = assert_raises(Eventbox::InvalidAccess) { eb.y }
     assert_match(/method `initialize' at/, err.to_s)
   end
 
