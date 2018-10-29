@@ -71,6 +71,16 @@ class Eventbox
         ensure
           action_finished(aid)
         end
+
+        # Discard all interrupts which are too late to arrive the running action
+        while Thread.pending_interrupt?
+          begin
+            Thread.handle_interrupt(Exception => :immediate) do
+              sleep 0.001
+            end
+          rescue Exception
+          end
+        end
       end
     end
 
