@@ -38,7 +38,15 @@ class Eventbox
       @shutdown = true
 
       # terminate all running action threads
-      @running_actions_for_gc.each(&:abort)
+      begin
+        @running_actions_for_gc.each(&:abort)
+      rescue ThreadError
+        # ThreadPool requires to lock a mutex, which fails in trap context.
+        # So defer the abort through another thread.
+        Thread.new do
+          @running_actions_for_gc.each(&:abort)
+        end
+      end
 
       nil
     end
