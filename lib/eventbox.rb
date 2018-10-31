@@ -1,5 +1,5 @@
 require "weakref"
-require "eventbox/argument_sanitizer"
+require "eventbox/sanitizer"
 require "eventbox/boxable"
 require "eventbox/event_loop"
 require "eventbox/object_registry"
@@ -103,7 +103,7 @@ class Eventbox
 
   # @private
   #
-  # Used in ArgumentSanitizer
+  # Used in Sanitizer
   def event_loop
     @__event_loop__
   end
@@ -128,7 +128,7 @@ class Eventbox
   # Initialize a new {Eventbox} instance.
   #
   # This method is executed for initialization of a Eventbox instance.
-  # This method receives all arguments given to +Eventbox.new+ after they have passed the {ArgumentSanitizer}.
+  # This method receives all arguments given to +Eventbox.new+ after they have passed the {Sanitizer}.
   # It can be used like +initialize+ in ordinary ruby classes including +super+ to initialize included modules or base classes.
   #
   # {init} can be defined as either {sync_call} or {async_call} with no difference.
@@ -139,7 +139,7 @@ class Eventbox
   # Create a proc object for asynchronous (fire-and-forget) calls similar to {async_call}.
   #
   # The created object can be safely called from any thread.
-  # All block arguments are passed through the {ArgumentSanitizer}.
+  # All block arguments are passed through the {Sanitizer}.
   # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   #
@@ -151,7 +151,7 @@ class Eventbox
   # Create a Proc object for synchronous calls similar to {sync_call}.
   #
   # The created object can be safely called from any thread.
-  # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
+  # All block arguments as well as the result value are passed through the {Sanitizer}.
   # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   #
@@ -173,7 +173,7 @@ class Eventbox
   # If yield procs are called internally, they must get a Proc object as the last argument.
   # It is called when a result was yielded.
   #
-  # All block arguments as well as the result value are passed through the {ArgumentSanitizer}.
+  # All block arguments as well as the result value are passed through the {Sanitizer}.
   # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
   # Instead use {Eventbox.action} in these cases.
   def yield_proc(name=nil, &block)

@@ -1,6 +1,6 @@
 require_relative "../test_helper"
 
-class EventboxArgumentSanitizerTest < Minitest::Test
+class EventboxSanitizerTest < Minitest::Test
   def test_untaggable_object_intern
     eb = Class.new(Eventbox) do
       sync_call def go(str)

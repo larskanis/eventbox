@@ -36,7 +36,7 @@ class Eventbox
     # Define a threadsafe method for asynchronous (fire-and-forget) calls.
     #
     # The created method can be safely called from any thread.
-    # All method arguments are passed through the {ArgumentSanitizer}.
+    # All method arguments are passed through the {Sanitizer}.
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {Eventbox.action Eventbox.action} in these cases.
     #
@@ -50,8 +50,8 @@ class Eventbox
           # Otherwise super() would start an infinite recursion.
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
+          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = Sanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
           @__event_loop__.async_call(eventbox, name, args, cb)
         end
         self
@@ -67,7 +67,7 @@ class Eventbox
     # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync calls can only return immediate values.
     # For deferred results use {yield_call} instead.
     #
-    # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
+    # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {Eventbox.action Eventbox.action} in these cases.
     def sync_call(name, &block)
@@ -77,8 +77,8 @@ class Eventbox
         if @__event_loop__.internal_thread?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
+          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = Sanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
           answer_queue = Queue.new
           @__event_loop__.sync_call(eventbox, name, args, answer_queue, cb)
           @__event_loop__.callback_loop(answer_queue)
@@ -99,7 +99,7 @@ class Eventbox
     # If yield methods are called internally, they must get a Proc object as the last argument.
     # It is called when a result was yielded.
     #
-    # All method arguments as well as the result value are passed through the {ArgumentSanitizer}.
+    # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {Eventbox.action Eventbox.action} in these cases.
     def yield_call(name, &block)
@@ -111,8 +111,8 @@ class Eventbox
           unbound_method.bind(eventbox).call(*args, &cb)
           self
         else
-          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = ArgumentSanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
+          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
+          cb = Sanitizer.sanitize_values(cb, @__event_loop__, @__event_loop__, name)
           answer_queue = Queue.new
           @__event_loop__.yield_call(eventbox, name, args, answer_queue, cb)
           @__event_loop__.callback_loop(answer_queue)
@@ -168,7 +168,7 @@ class Eventbox
     # By default each call to an action method spawns a new thread which executes the code of the action definition.
     # Alternatively a threadpool can be assigned by {with_options}.
     #
-    # All method arguments are passed through the {ArgumentSanitizer}.
+    # All method arguments are passed through the {Sanitizer}.
     #
     # Actions can return state changes or objects to the event loop by calls to methods created by {async_call}, {sync_call} or {yield_call} or through calling {async_proc}, {sync_proc} or {yield_proc} objects.
     # To avoid unsafe shared objects, the action block doesn't have access to local variables or instance variables.
@@ -197,7 +197,7 @@ class Eventbox
         meth = unbound_method.bind(sandbox)
 
         if @__event_loop__.internal_thread?
-          args = ArgumentSanitizer.sanitize_values(args, @__event_loop__, :extern)
+          args = Sanitizer.sanitize_values(args, @__event_loop__, :extern)
         end
         # Start a new action thread and return an Action instance
         @__event_loop__.start_action(meth, name, args)
@@ -258,7 +258,7 @@ class Eventbox
       end
 
       if @event_loop.internal_thread?
-        args = ArgumentSanitizer.sanitize_values(args, @event_loop, :extern)
+        args = Sanitizer.sanitize_values(args, @event_loop, :extern)
       end
       @thread.raise(*args)
     end

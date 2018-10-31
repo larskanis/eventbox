@@ -9,7 +9,7 @@ _Manage multithreading with the safety of event based programming_
 All code inside an {Eventbox} object is executed non-concurrently.
 It must not do any blocking operations.
 All blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Data races between internal and external objects are avoided through {Eventbox::ArgumentSanitizer filters} applied to all inputs and outputs.
+Data races between internal and external objects are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
 That way {Eventbox} guarantees stable states without a need for any locks.
 
 For better readability see the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).

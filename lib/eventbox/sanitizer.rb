@@ -1,7 +1,7 @@
 class Eventbox
   # Module for argument and result value sanitation.
   #
-  # All call arguments and result values between external and internal an vice versa are passed through the ArgumentSanitizer as either copies or as wrapped respectively unwrapped objects.
+  # All call arguments and result values between external and internal an vice versa are passed through the Sanitizer as either copies or as wrapped respectively unwrapped objects.
   # Only certain object types are passed through unchanged.
   # This filter is required to prevent data races through shared objects and to arbitrate between external blocking behaviour and internal event based behaviour.
   #
@@ -22,7 +22,7 @@ class Eventbox
   #   They are unwrapped when passed back to internal.
   # * Proc objects passed from external to internal are wrapped as {ExternalProc}.
   #   They are unwrapped when passed back to external.
-  module ArgumentSanitizer
+  module Sanitizer
     module_function
 
     def return_args(args)
