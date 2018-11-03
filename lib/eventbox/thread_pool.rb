@@ -156,13 +156,13 @@ class Eventbox
       end
     end
 
-    action def gc_start
+    private action def gc_start
       GC.start
     ensure
       gc_finished
     end
 
-    async_call def gc_finished
+    private async_call def gc_finished
       @run_gc_when_busy = true
     end
   end
