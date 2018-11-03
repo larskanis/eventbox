@@ -15,6 +15,26 @@ class Eventbox
   class MultipleResults < RuntimeError; end
   class AbortAction < RuntimeError; end
 
+  if RUBY_ENGINE=='jruby' && RUBY_VERSION.split(".").map(&:to_i).pack("C*") < [9,2,1,0].pack("C*")
+    # This is a workaround for bug https://github.com/jruby/jruby/issues/5314
+    # which was fixed in JRuby-9.2.1.0.
+    class Thread < ::Thread
+      def initialize(*args, &block)
+        started = Queue.new
+        super do
+          Thread.handle_interrupt(Exception => :never) do
+            started << true
+            block.call(*args)
+            # Immediately stop the thread, before the handle_interrupt has finished.
+            # This is necessary for JRuby to avoid possoble signal handling after the block.
+            Thread.exit
+          end
+        end
+        started.pop
+      end
+    end
+  end
+
   # Retrieves the Eventbox options of this class.
   #
   # @return [Hash]  The options for instantiation of this class.

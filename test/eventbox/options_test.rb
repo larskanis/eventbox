@@ -6,7 +6,11 @@ class EventboxOptionsTest < Minitest::Test
   end
 
   def test_default_options
-    assert_equal({threadpool: Thread, guard_time: 0.5}, Eventbox.eventbox_options)
+    if RUBY_ENGINE=='jruby'
+      skip "JRuby might use alternative Thread class."
+    else
+      assert_equal({threadpool: Thread, guard_time: 0.5}, Eventbox.eventbox_options)
+    end
   end
 
   def test_with_options
