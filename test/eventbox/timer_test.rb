@@ -141,4 +141,14 @@ class EventboxTimerTest < Minitest::Test
     end
     eb.shutdown!
   end
+
+  def test_all_repeated
+    20.times do
+      test_after
+      test_cancel
+      test_cancel_with_retrigger
+      test_delay_init
+      test_every
+    end
+  end
 end
