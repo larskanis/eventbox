@@ -62,6 +62,19 @@ class EventboxCallTest < Minitest::Test
     assert_match(/method `initialize' at/, err.to_s)
   end
 
+  def test_init_call_is_private
+    [:async_call, :sync_call, :yield_call].each do |call|
+      eb = Class.new(Eventbox) do
+        send(call, def init(res=nil)
+          res.yield if res
+        end)
+      end.new
+
+      err = assert_raises(NoMethodError) { eb.init }
+      assert_match(/private method `init' called/, err.to_s)
+    end
+  end
+
   class TestInitWithDef < Eventbox
     async_call def init(num, pr, pi)
       @values = [num.class, pr.class, pi.class, Thread.current.object_id]

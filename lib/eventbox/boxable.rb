@@ -31,6 +31,7 @@ class Eventbox
         remove_method(name)
         define_method(name, &cexec)
       end
+      private name if name == :init
     end
 
     # Define a threadsafe method for asynchronous (fire-and-forget) calls.
