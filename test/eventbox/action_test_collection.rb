@@ -545,3 +545,22 @@ def test_shutdown_internal_blocking
   eb.shutdown_blocking
   eb.shutdown_blocking
 end
+
+def test_call_definition_returns_name
+  v = nil
+  Class.new(Eventbox) do
+    v = action def test_action
+    end
+  end
+  assert_equal :test_action, v
+end
+
+def test_action_call_is_private
+  eb = Class.new(Eventbox) do
+    action def a
+    end
+  end.new
+
+  err = assert_raises(NoMethodError) { eb.a }
+  assert_match(/private method `a' called/, err.to_s)
+end

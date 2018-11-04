@@ -162,7 +162,7 @@ class Eventbox
       attr_writer name
     end
 
-    # Define a method for asynchronous execution.
+    # Define a private method for asynchronous execution.
     #
     # The call to the action method returns immediately after starting a new action.
     # It returns an {Action} object.
@@ -203,6 +203,7 @@ class Eventbox
         # Start a new action thread and return an Action instance
         @__event_loop__.start_action(meth, name, args)
       end
+      private name
       unbound_method = self.instance_method("__#{name}__")
       name
     end
