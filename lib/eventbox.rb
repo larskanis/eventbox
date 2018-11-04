@@ -15,7 +15,8 @@ class Eventbox
   class MultipleResults < RuntimeError; end
   class AbortAction < RuntimeError; end
 
-  if RUBY_ENGINE=='jruby' && RUBY_VERSION.split(".").map(&:to_i).pack("C*") < [9,2,1,0].pack("C*")
+  if RUBY_ENGINE=='jruby' && RUBY_VERSION.split(".").map(&:to_i).pack("C*") < [9,2,1,0].pack("C*") ||
+      RUBY_ENGINE=='truffleruby'
     # This is a workaround for bug https://github.com/jruby/jruby/issues/5314
     # which was fixed in JRuby-9.2.1.0.
     class Thread < ::Thread
