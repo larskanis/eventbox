@@ -52,8 +52,8 @@ class EventboxTimerTest < Minitest::Test
     with_fake_time do
       alerts = eb.run
       assert_equal [2, 1, 4, 6], alerts
+      eb.shutdown!
     end
-    eb.shutdown!
   end
 
   def test_every
@@ -83,8 +83,8 @@ class EventboxTimerTest < Minitest::Test
     with_fake_time do
       alerts = eb.run
       assert_equal [2, 1, 4, 2, 1, 6, 2, 1], alerts
+      eb.shutdown!
     end
-    eb.shutdown!
   end
 
   def test_cancel
@@ -115,8 +115,8 @@ class EventboxTimerTest < Minitest::Test
     with_fake_time do
       alerts = eb.run
       assert_equal [2, 1, 2, 5, 1, 6], alerts
+      eb.shutdown!
     end
-    eb.shutdown!
   end
 
   def test_cancel_with_retrigger
@@ -138,8 +138,8 @@ class EventboxTimerTest < Minitest::Test
     with_fake_time do
       alerts = eb.run
       assert_equal [], alerts
+      eb.shutdown!
     end
-    eb.shutdown!
   end
 
   def test_all_repeated
