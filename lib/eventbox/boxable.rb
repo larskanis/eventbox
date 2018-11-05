@@ -139,7 +139,7 @@ class Eventbox
 
     # Threadsafe read and write access to instance variables.
     #
-    # Attention: Be careful with read-modify-write operations - they are *not* atomic!
+    # Attention: Be careful with read-modify-write operations - they are *not* atomic but are executed as two independent operations.
     #
     # This will lose counter increments, since `counter` is incremented in a non-atomic manner:
     #   attr_accessor :counter
@@ -150,7 +150,10 @@ class Eventbox
     #     self.counter += 1
     #   end
     #
-    # Instead do increments within one method call like so:
+    # Instead don't use accessors but do increments within one method call like so:
+    #   async_call def start
+    #     10.times { do_something }
+    #   end
     #   action def do_something
     #     increment 1
     #   end
