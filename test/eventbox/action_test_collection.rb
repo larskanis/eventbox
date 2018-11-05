@@ -282,10 +282,7 @@ def test_action_denies_access_to_instance_variables
       exiter(result)
     end
     action def exiter(result)
-      return_res(result, instance_variable_defined?("@a"))
-    end
-    async_call def return_res(result, var)
-      result.yield var
+      result.yield instance_variable_defined?("@a")
     end
   end.new
   assert_equal false, fc.inst_var
