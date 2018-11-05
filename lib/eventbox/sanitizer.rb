@@ -122,7 +122,7 @@ class Eventbox
       arg2
     end
 
-    def sanitize_value(arg, source_event_loop, target_event_loop, name)
+    def sanitize_value(arg, source_event_loop, target_event_loop, name=nil)
       case arg
       when NilClass, Numeric, Symbol, TrueClass, FalseClass # Immutable objects
         arg
@@ -194,7 +194,7 @@ class Eventbox
     end
 
     def sanitize_values(args, source_event_loop, target_event_loop, name=nil)
-      args.is_a?(Array) ? args.map { |arg| sanitize_value(arg, source_event_loop, target_event_loop, name) } : sanitize_value(args, source_event_loop, target_event_loop, name)
+      args.map { |arg| sanitize_value(arg, source_event_loop, target_event_loop, name) }
     end
   end
 

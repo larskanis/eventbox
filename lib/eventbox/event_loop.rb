@@ -114,7 +114,7 @@ class Eventbox
     def sync_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
         res = box.send("__#{name}__", *args, &block)
-        res = Sanitizer.sanitize_values(res, self, :extern)
+        res = Sanitizer.sanitize_value(res, self, :extern)
         answer_queue << res
       end
     end
@@ -136,7 +136,7 @@ class Eventbox
     def sync_proc_call(pr, args, arg_block, answer_queue)
       with_call_frame(SyncProc, answer_queue) do
         res = pr.yield(*args, &arg_block)
-        res = Sanitizer.sanitize_values(res, self, :extern)
+        res = Sanitizer.sanitize_value(res, self, :extern)
         answer_queue << res
       end
     end
@@ -163,7 +163,7 @@ class Eventbox
         else
           # called externally
           args = Sanitizer.sanitize_values(args, self, self)
-          arg_block = Sanitizer.sanitize_values(arg_block, self, self)
+          arg_block = Sanitizer.sanitize_value(arg_block, self, self)
           async_proc_call(block, args, arg_block)
         end
         # Ideally async_proc{}.call would return the AsyncProc object to allow stacking like async_proc{}.call.call, but self is bound to the EventLoop object here.
@@ -180,7 +180,7 @@ class Eventbox
           # called externally
           answer_queue = Queue.new
           args = Sanitizer.sanitize_values(args, self, self)
-          arg_block = Sanitizer.sanitize_values(arg_block, self, self)
+          arg_block = Sanitizer.sanitize_value(arg_block, self, self)
           sync_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
@@ -198,7 +198,7 @@ class Eventbox
           # called externally
           answer_queue = Queue.new
           args = Sanitizer.sanitize_values(args, self, self)
-          arg_block = Sanitizer.sanitize_values(arg_block, self, self)
+          arg_block = Sanitizer.sanitize_value(arg_block, self, self)
           yield_proc_call(block, args, arg_block, answer_queue)
           callback_loop(answer_queue)
         end
@@ -237,8 +237,8 @@ class Eventbox
             raise MultipleResults, "received multiple results for method `#{name}'"
           end
         end
-        resu = Sanitizer.return_args(resu)
         resu = Sanitizer.sanitize_values(resu, self, :extern)
+        resu = Sanitizer.return_args(resu)
         answer_queue << resu
         answer_queue = nil
       end
@@ -272,7 +272,7 @@ class Eventbox
           cbres = rets.block.yield(*rets.args, &rets.arg_block)
 
           if rets.cbresult
-            cbres = Sanitizer.sanitize_values(cbres, self, self)
+            cbres = Sanitizer.sanitize_value(cbres, self, self)
             external_proc_result(rets.cbresult, cbres)
           end
         else
@@ -304,7 +304,7 @@ class Eventbox
     def _external_proc_call(block, name, args, arg_block, cbresult)
       if @latest_answer_queue
         args = Sanitizer.sanitize_values(args, self, :extern)
-        arg_block = Sanitizer.sanitize_values(arg_block, self, :extern)
+        arg_block = Sanitizer.sanitize_value(arg_block, self, :extern)
         @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
         nil
       else
