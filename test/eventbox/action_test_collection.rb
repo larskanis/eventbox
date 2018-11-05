@@ -291,6 +291,23 @@ def test_action_denies_access_to_instance_variables
   assert_equal false, fc.inst_var
 end
 
+def test_action_access_to_private_methods_doesnt_leak_instance_variables
+  eb = Class.new(Eventbox) do
+    yield_call def go(result)
+      @var1 = 123
+      exiter(result)
+    end
+    action def exiter(result)
+      @var2 = 321
+      result.yield private_meth
+    end
+    private def private_meth
+      [@var1, @var2]
+    end
+  end.new
+  assert_equal [nil, 321], eb.go
+end
+
 class TestActionRaise < Eventbox
   class Stop < Interrupt
     def initialize(result)
