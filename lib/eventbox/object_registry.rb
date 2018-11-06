@@ -3,7 +3,8 @@ class Eventbox
     class << self
       def taggable?(object)
         case object
-        when Integer, InternalObject, ExternalObject
+        # Keep the list of non taggable object types in sync with Sanitizer.sanitize_value
+        when NilClass, Numeric, Symbol, TrueClass, FalseClass, WrappedObject, Action, Module, Eventbox, Proc
           false
         else
           if object.frozen?
