@@ -20,27 +20,72 @@ class Eventbox
   class ThreadPool < Eventbox
     class AbortAction < RuntimeError; end
 
-    # External representation of a work task given as block to ThreadPool.new
-    class PoolThread
-      def initialize(request, pool)
-        @request = request
-        @pool = pool
+    # Representation of a work task given as block to ThreadPool.new
+    class PoolThread < Eventbox
+      # It has 3 implicit states: enqueued, running, finished
+      # Variables for state "enqueued": @block, @joins, @signals
+      # Variables for state "running": @joins, @action
+      # Variables for state "finished": -
+      # Variables unused in this state are set to `nil`.
+      async_call def init(block, action)
+        @block = block
+        @joins = []
+        @signals = block ? [] : nil
+        @action = action
       end
 
-      def raise(*args)
+      async_call def raise(*args)
         # Eventbox::AbortAction would shutdown the thread pool.
         # To stop the borrowed thread only remap to Eventbox::ThreadPool::AbortAction .
         args[0] = AbortAction if args[0] == Eventbox::AbortAction
-        @pool.raise(@request, *args)
+
+        if a=@action
+          # The task is running -> send the signal to the thread
+          a.raise(*args)
+        elsif s=@signals
+          # The task is still enqueued -> add the signal to the request
+          s << args
+        end
       end
 
       # Belongs the current thread to this action.
-      def current?
-        @pool.current?(@request)
+      sync_call def current?
+        if a=@action
+          a.current?
+        else
+          false
+        end
       end
 
-      def join
-        @pool.join(@request)
+      yield_call def join(result)
+        if j=@joins
+          j << result
+        else
+          # action has already finished
+          result.yield
+        end
+      end
+
+      # @private
+      async_call def __start__(action, input)
+        # Send the block to the start_pool_thread as result of next_job
+        input.yield(self, @block)
+
+        # Send all accumulated signals to the action thread
+        @signals.each do |sig|
+          action.raise(*sig)
+        end
+
+        @action = action
+        @signals = nil
+        @block = nil
+      end
+
+      # @private
+      async_call def __finish__
+        @action = nil
+        @joins.each(&:yield)
+        @joins = nil
       end
     end
 
@@ -56,13 +101,15 @@ class Eventbox
 
     action def start_pool_thread(action)
       while true
-        req, bl = next_job(action, req)
+        req, bl = next_job(action)
         begin
           Thread.handle_interrupt(AbortAction => :on_blocking) do
             bl.yield
           end
         rescue AbortAction
           # The pooled action was aborted, but the thread keeps going
+        ensure
+          req.__finish__
         end
 
         # Discard all interrupts which are too late to arrive the running action
@@ -77,44 +124,20 @@ class Eventbox
       end
     end
 
-    private yield_call def next_job(action, last_req, input)
-      if last_req
-        last_req.action = nil
-        last_req.joins.each(&:call)
-        last_req.joins = nil
-      end
-
+    private yield_call def next_job(action, input)
       if @requests.empty?
         @jobless << [action, input]
       else
         # Take the oldest request and send it to the calling action.
         req = @requests.shift
-        input.yield(req, req.block)
-
-        # Send all accumulated signals to the action thread
-        req.signals.each do |sig|
-          action.raise(*sig)
-        end
-
-        req.action = action
-        req.signals = nil
-        req.block = nil
+        req.__start__(action, input)
       end
     end
-
-    # Internal representation of a PoolThread
-    #
-    # It has 3 states: enqueued, running, finished
-    # Members for state "enqueued": block, joins, signals
-    # Members for state "running": joins, action
-    # Members for state "finished": -
-    # Unused members are set to `nil`.
-    Request = Struct.new :block, :joins, :signals, :action
 
     sync_call def new(&block)
       if @jobless.empty?
         # No free thread -> enqueue the request
-        req = shared_object(Request.new(block, [], []))
+        req = PoolThread.new(block, nil)
         @requests << req
 
         # Try to release some actions by the GC
@@ -125,38 +148,11 @@ class Eventbox
       else
         # Immediately start the block
         action, input = @jobless.shift
-        req = shared_object(Request.new(nil, [], nil, action))
+        req = PoolThread.new(nil, action)
         input.yield(req, block)
       end
 
-      PoolThread.new(req, self)
-    end
-
-    async_call def raise(req, *args)
-      if req.action
-        # The task is running -> send the signal to the thread
-        req.action.raise(*args)
-      elsif req.signals
-        # The task is still enqueued -> add the signal to the request
-        req.signals << args
-      end
-    end
-
-    sync_call def current?(req)
-      if req.action
-        req.action.current?
-      else
-        false
-      end
-    end
-
-    yield_call def join(req, result)
-      if req.joins
-        req.joins << result
-      else
-        # action has already finished
-        result.yield
-      end
+      req
     end
 
     private action def gc_start

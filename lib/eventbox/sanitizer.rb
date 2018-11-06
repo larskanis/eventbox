@@ -141,9 +141,9 @@ class Eventbox
       else
         # Check if the object has been tagged
         case ObjectRegistry.get_tag(arg)
-        when EventLoop
+        when EventLoop # Internal object marked as shared_object
           InternalObject.new(arg, source_event_loop, name)
-        when ExternalSharedObject
+        when ExternalSharedObject # External object marked as shared_object
           ExternalObject.new(arg, source_event_loop, name)
         else
           # Not tagged -> try to deep copy the object
@@ -227,7 +227,7 @@ class Eventbox
   # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
   class ExternalObject < WrappedObject
     def object_for(target_event_loop)
-      @event_loop == target_event_loop ? self : @object
+      target_event_loop == :extern ? @object : self
     end
   end
 
@@ -277,7 +277,7 @@ class Eventbox
     end
 
     def object_for(target_event_loop)
-      @event_loop == target_event_loop ? self : @object
+      target_event_loop == :extern ? @object : self
     end
   end
 
