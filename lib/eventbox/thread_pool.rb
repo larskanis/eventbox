@@ -55,15 +55,14 @@ class Eventbox
     end
 
     action def start_pool_thread(action)
-      loop do
-        req, bl = next_job(action)
+      while true
+        req, bl = next_job(action, req)
         begin
           Thread.handle_interrupt(AbortAction => :on_blocking) do
             bl.yield
           end
         rescue AbortAction
-        ensure
-          request_finished(req)
+          # The pooled action was aborted, but the thread keeps going
         end
 
         # Discard all interrupts which are too late to arrive the running action
@@ -78,7 +77,13 @@ class Eventbox
       end
     end
 
-    private yield_call def next_job(action, input)
+    private yield_call def next_job(action, last_req, input)
+      if last_req
+        last_req.action = nil
+        last_req.joins.each(&:call)
+        last_req.joins = nil
+      end
+
       if @requests.empty?
         @jobless << [action, input]
       else
@@ -95,12 +100,6 @@ class Eventbox
         req.signals = nil
         req.block = nil
       end
-    end
-
-    private async_call def request_finished(req)
-      req.joins.each(&:call)
-      req.joins = nil
-      req.action = nil
     end
 
     # Internal representation of a PoolThread
