@@ -105,8 +105,14 @@ The external call returns immediately, but can't return a value.
 
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
-If you just need a queue it's better to stay at the Queue implementation of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
+The branch in `Queue#deq` shows a typical decision taking in Eventbox:
+If the call can be processed immediately it yields the result, else wise the result is added to a list to be processes later.
+It's important to check this list at each event which could signal the ability to complete the enqueued processing.
+This is done in `Queue#enq` in the above example.
+
+If you just need a queue it's better to stay at the Queue implementations of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
 However if you want to cancel items in the queue for example, you need more control about waiting items or waiting callers than common thread abstractions offer.
+The same if you want to query and visualize the internal state of processing - that means the pending items in the queue.
 
 
 ### A more practical example
@@ -181,24 +187,53 @@ The order depends on the particular response time of the URL.
  "http://github.com"=>"\n"}
 ```
 
+Since Eventbox protects from data races, it's insignificant in which order events are emitted by an internal method and whether objects are changed after being sent.
+It's therefore OK to set `@downloads` both before or after starting the action threads per `start_download` in `init`.
 
-### When to use Eventbox?
+## What does it protect?
+
+Eventbox distinguish between internal and external scope.
+Internal scope is within methods defined by {Eventbox.async_call}, {Eventbox.sync_call} or {Eventbox.yield_call}.
+External scope are all callers outside of the particular Eventbox object.
+External scope are also methods defined by {Eventbox.action}, although they can call object internal methods and although they reside within the same class.
+
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+
+At each change of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
+It protects the internal scope from data races and arbitrates between blocking and event based processing.
+This is done by tagging the objects to the issueing Eventbox object and only unwrapping when the object comes back to the origin scope of the origin object.
+That way internal methods never get an inconsistent state even through blocks or {Eventbox#yield_proc proc objects}.
+External callers also don't block the Eventbox instance for other threads even if the call from one thread is delayed.
+
+However Eventbox doesn't protect external scope from threading issues.
+External scope is considered as only one common space.
+External libraries and objects must be threadsafe on its own if used from different threads.
+This is beyond the scope of Eventbox.
+
+
+## When to use Eventbox?
 
 Eventbox comes into action when things are getting more complicated or more customized.
 For instance a module which shall distribute work orders to external processes with a noticeable startup time, several activation steps and different properties per process.
 In such cases available abstractions don't fit well to the problem.
-Eventbox helps to manage a consistent state about running activities.
+Eventbox helps to manage a consistent state about these running activities.
 It also allows to query this state in a natural way, since states can be stored in plain ruby objects (arrays, hashs, etc).
 
 While not impossible to implement things per raw threads, mutexes and condition variables, it's pretty hard to do that right.
-But if you don't do it right, you'll probably not notice that, until going to production.
+Most thread abstractions don't do deeper checks for wrong usage like data races.
+Ruby doesn't (yet) have mechanisms to bind objects to threads.
+There are no tools to verify correct usage of mutexes in ruby.
+However threading errors are subtle, so you'll probably not notice mistakes, until going to production.
+
+Due to Eventbox's checks and guaranties it's easier to verify and prove correctness of implementations running on top of it.
+This was the primary main reason to develop this library.
 
 
 ## Comparison with other libraries
 
 Eventbox doesn't try to implement IO or other blocking operations on top of the global event loop of a reactor model.
-Instead it encourages the use of blocking operations and threads.
-The only type of events handled by the object internal event loop are method calls.
+Instead it encourages the use of blocking operations and threads for things which should run in parallel, while still keeping the majority of code in safe internal methods written in a event based style.
+Because IO is done in action threads, the only type of events handled by the object internal event loop are method calls received from actions or external calls.
 
 This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid).
 Eventbox is reasonably fast, but is not written to minimize resource consumption or maximize performance or throughput.

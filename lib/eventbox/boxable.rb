@@ -39,7 +39,7 @@ class Eventbox
     # The created method can be safely called from any thread.
     # All method arguments are passed through the {Sanitizer}.
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
-    # Instead use {Eventbox.action Eventbox.action} in these cases.
+    # Instead use {action} in these cases.
     #
     # The method always returns +self+ to the caller.
     def async_call(name, &block)
@@ -69,7 +69,7 @@ class Eventbox
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
-    # Instead use {Eventbox.action Eventbox.action} in these cases.
+    # Instead use {action} in these cases.
     def sync_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
@@ -101,7 +101,7 @@ class Eventbox
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
-    # Instead use {Eventbox.action Eventbox.action} in these cases.
+    # Instead use {action} in these cases.
     def yield_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
