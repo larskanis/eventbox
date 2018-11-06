@@ -5,12 +5,17 @@
 
 _Manage multithreading with the safety of event based programming_
 
-{Eventbox} objects are event based from the inside but thread safe from the outside.
+{Eventbox} objects are event based and single threaded from the inside but thread safe and blocking from the outside.
+Eventbox enforces a separation of code for event processing and code running blocking operations.
 All code inside an {Eventbox} object is executed non-concurrently.
 It must not do any blocking operations.
-All blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Data races between internal and external objects are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
-That way {Eventbox} guarantees stable states without a need for any locks.
+
+In the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
+Communication between actions and event processing is done through ordinary method calls.
+
+An important task of Eventbox is to avoid race conditions through shared data.
+Such data races between internal and external objects are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
+That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
 For better readability see the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
@@ -41,7 +46,7 @@ Or install it yourself as:
 ## Usage
 
 {Eventbox} is an universal approach to build thread safe objects.
-It can therefore be used to build well known mutithread abstractions like a Queue class:
+It can therefore be used to build well known multithread abstractions like a Queue class:
 
 ```ruby
 require "eventbox"
@@ -97,6 +102,11 @@ The key feature is the {yield_call} method definition.
 It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
 In contrast {async_call} defines a method which handles one event only - the start of the call.
 The external call returns immediately, but can't return a value.
+
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+
+If you just need a queue it's better to stay at the Queue implementation of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
+However if you want to cancel items in the queue for example, you need more control about waiting items or waiting callers than common thread abstractions offer.
 
 
 ### A more practical example
@@ -171,78 +181,13 @@ The order depends on the particular response time of the URL.
  "http://github.com"=>"\n"}
 ```
 
-### Another example: ThreadPool
-
-The following class implements a thread pool with a fixed number of threads to be used by the `pool` method.
-
-```ruby
-class ThreadPool < Eventbox
-  async_call def init(pool_size)
-    @que = []                 # Initialize an empty job queue
-    @jobless = []             # Initialize the list of jobless action threads
-
-    pool_size.times do        # Start up x action threads
-      pool_thread
-    end
-  end
-
-  private action def pool_thread  # The action call returns immediately, but spawns a new thread
-    while bl=next_job     # Each new thread waits for a job to be pooled
-      bl.yield            # Execute the external job enqueued by `pool`
-    end
-  end
-
-  # Get the next job or wait for one
-  # The method is private, so that it's accessible in the pool_thread action but not externally
-  private yield_call def next_job(result)
-    if @que.empty?            # No job pooled?
-      @jobless << result      # Enqueue the action thread to the list of jobless workers
-    else                      # Already pooled jobs?
-      result.yield @que.shift # Take the oldest job and let next_job return with this job
-    end
-  end
-
-  # Enqueue a new job
-  async_call def pool(&block)
-    if @jobless.empty?        # No jobless thread available?
-      @que << block           # Append the external block as job into the queue
-    else                      # A thread is waiting?
-      @jobless.shift.yield block  # Take one thread and let next_job return the given job
-    end                           # so that it is processed by the pool_thread action above
-  end
-end
-```
-
-This ThreadPool can be used like so:
-
-```ruby
-tp = ThreadPool.new(3)  # Create a thread pool with 3 action threads
-5.times do |i|          # Start 5 jobs concurrently
-  tp.pool do            # pool never blocks, but enqueues jobs when no free thread is available
-    sleep 1             # The mission of each job: Wait for 1 second (3 jobs concurrently)
-    p [i, Thread.current.object_id]
-  end
-end
-
-# It gives something like the following output after 1 second:
-[2, 47030774465880]
-[1, 47030775602740]
-[0, 47030774464940]
-# and something like this after one more seconds:
-[3, 47030775602740]
-[4, 47030774465880]
-```
-
-There are various battle proof implementations of multithreaded primitives, which are probably faster and more feature rich than the above.
-See [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby) for a great collection of threading abstractions.
-
 
 ### When to use Eventbox?
 
 Eventbox comes into action when things are getting more complicated or more customized.
 Say a ThreadPool like challenge, but for virtual machines with a noticeable startup time, several activation steps and different properties per VM.
 In such cases available abstractions don't fit well to the problem.
-And while not impossible to implement things per mutexes and condition variables, it's pretty hard to do that right.
+And while not impossible to implement things per raw threads, mutexes and condition variables, it's pretty hard to do that right.
 But if you don't do it right, you'll probably not notice that, until going to production.
 
 
