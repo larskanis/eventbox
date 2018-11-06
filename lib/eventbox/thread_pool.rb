@@ -20,9 +20,10 @@ class Eventbox
   class ThreadPool < Eventbox
     class AbortAction < RuntimeError; end
 
+    # External representation of a work task given as block to ThreadPool.new
     class PoolThread
-      def initialize(rid, pool)
-        @rid = rid
+      def initialize(request, pool)
+        @request = request
         @pool = pool
       end
 
@@ -30,27 +31,22 @@ class Eventbox
         # Eventbox::AbortAction would shutdown the thread pool.
         # To stop the borrowed thread only remap to Eventbox::ThreadPool::AbortAction .
         args[0] = AbortAction if args[0] == Eventbox::AbortAction
-        @pool.raise(@rid, *args)
+        @pool.raise(@request, *args)
       end
 
       # Belongs the current thread to this action.
       def current?
-        @pool.current?(@rid)
+        @pool.current?(@request)
       end
 
       def join
-        @pool.join(@rid)
+        @pool.join(@request)
       end
     end
 
-    Request = Struct.new :block, :joins, :signals
-    Running = Struct.new :action, :joins
-
     async_call def init(pool_size, run_gc_when_busy: false)
       @jobless = []
-      @rid = 0
-      @requests = {}
-      @running = {}
+      @requests = []
       @run_gc_when_busy = run_gc_when_busy
 
       pool_size.times do
@@ -60,14 +56,14 @@ class Eventbox
 
     action def start_pool_thread(action)
       loop do
-        rid, bl = next_job(action)
+        req, bl = next_job(action)
         begin
           Thread.handle_interrupt(AbortAction => :on_blocking) do
             bl.yield
           end
         rescue AbortAction
         ensure
-          request_finished(rid)
+          request_finished(req)
         end
 
         # Discard all interrupts which are too late to arrive the running action
@@ -87,28 +83,40 @@ class Eventbox
         @jobless << [action, input]
       else
         # Take the oldest request and send it to the calling action.
-        rid, req = @requests.shift
-        input.yield(rid, req.block)
+        req = @requests.shift
+        input.yield(req, req.block)
 
         # Send all accumulated signals to the action thread
         req.signals.each do |sig|
           action.raise(*sig)
         end
 
-        @running[rid] = Running.new(action, req.joins)
+        req.action = action
+        req.signals = nil
+        req.block = nil
       end
     end
 
-    private async_call def request_finished(rid)
-      run = @running.delete(rid)
-      run.joins.each(&:call)
+    private async_call def request_finished(req)
+      req.joins.each(&:call)
+      req.joins = nil
+      req.action = nil
     end
 
+    # Internal representation of a PoolThread
+    #
+    # It has 3 states: enqueued, running, finished
+    # Members for state "enqueued": block, joins, signals
+    # Members for state "running": joins, action
+    # Members for state "finished": -
+    # Unused members are set to `nil`.
+    Request = Struct.new :block, :joins, :signals, :action
+
     sync_call def new(&block)
-      @rid += 1
       if @jobless.empty?
         # No free thread -> enqueue the request
-        @requests[@rid] = Request.new(block, [], [])
+        req = shared_object(Request.new(block, [], []))
+        @requests << req
 
         # Try to release some actions by the GC
         if @run_gc_when_busy
@@ -118,35 +126,34 @@ class Eventbox
       else
         # Immediately start the block
         action, input = @jobless.shift
-        input.yield(@rid, block)
-        @running[@rid] = Running.new(action, [])
+        req = shared_object(Request.new(nil, [], nil, action))
+        input.yield(req, block)
       end
 
-      PoolThread.new(@rid, self)
+      PoolThread.new(req, self)
     end
 
-    async_call def raise(rid, *args)
-      if run=@running[rid]
+    async_call def raise(req, *args)
+      if req.action
         # The task is running -> send the signal to the thread
-        run.action.raise(*args)
-      elsif req=@requests[rid]
+        req.action.raise(*args)
+      elsif req.signals
         # The task is still enqueued -> add the signal to the request
         req.signals << args
       end
     end
 
-    sync_call def current?(rid)
-      if run=@running[rid]
-        run.action.current?
+    sync_call def current?(req)
+      if req.action
+        req.action.current?
       else
         false
       end
     end
 
-    yield_call def join(rid, result)
-      run_or_req = @running[rid] || @requests[rid]
-      if run_or_req
-        run_or_req.joins << result
+    yield_call def join(req, result)
+      if req.joins
+        req.joins << result
       else
         # action has already finished
         result.yield
