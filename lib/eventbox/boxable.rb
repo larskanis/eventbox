@@ -93,6 +93,7 @@ class Eventbox
     # Instead the method is called with one additional argument internally, which is used to yield a result value.
     # The result value can be yielded within the called method, but it can also be called by any other internal or external method, leading to a deferred method return.
     # The external thread calling this method is suspended until a result is yielded.
+    # However the Eventbox object keeps responsive to calls from other threads.
     #
     # The created method can be safely called from any thread.
     # If yield methods are called internally, they must get a Proc object as the last argument.

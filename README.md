@@ -98,9 +98,9 @@ end
 ```
 
 Although there are no mutex or condition variables in use, the implementation is guaranteed to be threadsafe.
-The key feature is the {yield_call} method definition.
+The key feature is the {Eventbox.yield_call} method definition.
 It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
-In contrast {async_call} defines a method which handles one event only - the start of the call.
+In contrast {Eventbox.async_call} defines a method which handles one event only - the start of the call.
 The external call returns immediately, but can't return a value.
 
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
@@ -185,9 +185,12 @@ The order depends on the particular response time of the URL.
 ### When to use Eventbox?
 
 Eventbox comes into action when things are getting more complicated or more customized.
-Say a ThreadPool like challenge, but for virtual machines with a noticeable startup time, several activation steps and different properties per VM.
+For instance a module which shall distribute work orders to external processes with a noticeable startup time, several activation steps and different properties per process.
 In such cases available abstractions don't fit well to the problem.
-And while not impossible to implement things per raw threads, mutexes and condition variables, it's pretty hard to do that right.
+Eventbox helps to manage a consistent state about running activities.
+It also allows to query this state in a natural way, since states can be stored in plain ruby objects (arrays, hashs, etc).
+
+While not impossible to implement things per raw threads, mutexes and condition variables, it's pretty hard to do that right.
 But if you don't do it right, you'll probably not notice that, until going to production.
 
 

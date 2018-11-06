@@ -1,10 +1,19 @@
 class Eventbox
   # Module for argument and result value sanitation.
   #
-  # All call arguments and result values between external and internal an vice versa are passed through the Sanitizer as either copies or as wrapped respectively unwrapped objects.
-  # Only certain object types are passed through unchanged.
-  # This filter is required to prevent data races through shared objects and to arbitrate between external blocking behaviour and internal event based behaviour.
+  # All call arguments and result values between external and internal an vice versa are passed through the Sanitizer.
+  # This filter is required to prevent data races through shared objects or non-synchonized proc execution.
+  # It also wrapps blocks and Proc objects to arbitrate between external blocking behaviour and internal event based behaviour.
   #
+  # Depending on the type of the object and the direction of the call it is passed
+  # * directly (immutable objects or already wrapped objects)
+  # * as a deep copy (if copyable)
+  # * as a wrapped object (Proc objects and non copyable objects)
+  # * as a unwrapped object (when passing back to origin)
+  #
+  # The filter is recursively applied to all object data (instance variables or elements), if the object is non copyable.
+  #
+  # In detail this works as following.
   # Objects which are passed through unchanged are:
   # * Eventbox, Action and Module objects
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
@@ -15,7 +24,7 @@ class Eventbox
   # Both cases even work if the object is encapsulated by another object.
   #
   # In all other cases the following rules apply:
-  # * If the object is mashalable, it is passed as a deep copy through Marshal.dump and Marshal.load .
+  # * If the object is marshalable, it is passed as a deep copy through Marshal.dump and Marshal.load .
   # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
   # * If the object can't be marshaled or dissected, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow.
   # * Proc objects passed from internal to external are wrapped as {InternalObject}.
