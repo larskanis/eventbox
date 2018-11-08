@@ -41,6 +41,8 @@ class Eventbox
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
     #
+    # In contrast to {sync_call} it's not possible to call external blocks or proc objects from {async_call} methods.
+    #
     # The method always returns +self+ to the caller.
     def async_call(name, &block)
       unbound_method = nil
@@ -66,6 +68,9 @@ class Eventbox
     # It is simular to {async_call}, but the method waits until the method body is executed and returns its return value.
     # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync calls can only return immediate values.
     # For deferred results use {yield_call} instead.
+    #
+    # It's possible to call external blocks or proc objects from {sync_call} methods.
+    # Blocks are executed by the same thread that calls the {sync_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
@@ -98,6 +103,9 @@ class Eventbox
     # The created method can be safely called from any thread.
     # If yield methods are called internally, they must get a Proc object as the last argument.
     # It is called when a result was yielded.
+    #
+    # It's possible to call external blocks or proc objects from {yield_call} methods up to the point when the result was yielded.
+    # Blocks are executed by the same thread that calls the {yield_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.

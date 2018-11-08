@@ -7,8 +7,7 @@ _Manage multithreading with the safety of event based programming_
 
 {Eventbox} objects are event based and single threaded from the inside but thread safe and blocking from the outside.
 Eventbox enforces a separation of code for event processing and code running blocking operations.
-All code inside an {Eventbox} object is executed non-concurrently.
-It must not do any blocking operations.
+All code inside an {Eventbox} object is executed non-concurrently and hence must not do any blocking operations.
 
 In the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
 Communication between actions and event processing is done through ordinary method calls.
@@ -190,25 +189,46 @@ The order depends on the particular response time of the URL.
 Since Eventbox protects from data races, it's insignificant in which order events are emitted by an internal method and whether objects are changed after being sent.
 It's therefore OK to set `@downloads` both before or after starting the action threads per `start_download` in `init`.
 
-## What does it protect?
 
-Eventbox distinguish between internal and external scope.
-Internal scope is within methods defined by {Eventbox.async_call}, {Eventbox.sync_call} or {Eventbox.yield_call}.
-External scope are all callers outside of the particular Eventbox object.
-External scope are also methods defined by {Eventbox.action}, although they can call object internal methods and although they reside within the same class.
+## Call types
+
+Eventbox offers 3 call types for internal scope:
+
+* {Eventbox.yield_call} defines a blocking or non-blocking method with return value. It is the most flexible call type.
+* {Eventbox.sync_call} is a convenience version of yield_call for a non-blocking method with return value.
+* {Eventbox.async_call} is a convenience version of yield_call for a non-blocking method without return value.
 
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
-At each change of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
-It protects the internal scope from data races and arbitrates between blocking and event based processing.
-This is done by tagging the objects to the issueing Eventbox object and only unwrapping when the object comes back to the origin scope of the origin object.
-That way internal methods never get an inconsistent state even through blocks or {Eventbox#yield_proc proc objects}.
-External callers also don't block the Eventbox instance for other threads even if the call from one thread is delayed.
+Similary there are 3 types of proc objects which act as anonymous versions of the above method call types.
 
-However Eventbox doesn't protect external scope from threading issues.
-External scope is considered as only one common space.
+* {Eventbox#yield_proc} allocates a blocking or non-blocking proc object with a return value.
+* {Eventbox#sync_proc} allocates a Proc object for a non-blocking piece of code with return value.
+* {Eventbox#async_proc} allocates a Proc object for a non-blocking piece of code without return value.
+
+There are also accessor methods usable as known from ordinary ruby objects: {Eventbox.attr_reader},  {Eventbox.attr_writer} and  {Eventbox.attr_accessor}.
+
+{Eventbox.action Action} methods are very different to the above.
+They run in parallel to all internal methods within their own thread.
+
+
+## How does it work?
+
+Eventbox distinguish between internal and external scope:
+
+* Internal scope is within methods defined by {Eventbox.async_call}, {Eventbox.sync_call} or {Eventbox.yield_call}.
+* External scope are all callers outside of the particular Eventbox object.
+* External scope are also methods defined by {Eventbox.action}, although they can call object internal methods and although they reside within the same class.
+
+At each change of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
+It protects the internal scope from data races and arbitrates between blocking and event based semantics.
+This is done by copying or wrapping the objects conveniently as described in the {Eventbox::Sanitizer}.
+That way internal methods never get an inconsistent state regardless of the activities of external threads.
+
+However Eventbox doesn't protect external scope and action scope from threading issues.
+External scope is recognized as only one common space.
 External libraries and objects must be threadsafe on its own if used from different threads.
-This is beyond the scope of Eventbox.
+Protecting them is beyond the scope of Eventbox.
 
 
 ## When to use Eventbox?
@@ -217,7 +237,7 @@ Eventbox comes into action when things are getting more complicated or more cust
 For instance a module which shall distribute work orders to external processes with a noticeable startup time, several activation steps and different properties per process.
 In such cases available abstractions don't fit well to the problem.
 Eventbox helps to manage a consistent state about these running activities.
-It also allows to query this state in a natural way, since states can be stored in plain ruby objects (arrays, hashs, etc).
+It also allows to query this state in a natural way, since states can be stored in plain ruby objects (arrays, hashs, etc) instead of specialized thread abstractions.
 
 While not impossible to implement things per raw threads, mutexes and condition variables, it's pretty hard to do that right.
 Most thread abstractions don't do deeper checks for wrong usage like data races.
