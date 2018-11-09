@@ -96,7 +96,9 @@ class Eventbox
     #
     # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
     # Instead the method is called with one additional argument internally, which is used to yield a result value.
-    # The result value can be yielded within the called method, but it can also be called by any other internal or external method, leading to a deferred method return.
+    # In contrast to a +return+ statement, the execution of the method continues after yielding a result.
+    #
+    # The result value can be yielded within the called method, but it can also be stored and called by any other internal or external method, leading to a deferred method return.
     # The external thread calling this method is suspended until a result is yielded.
     # However the Eventbox object keeps responsive to calls from other threads.
     #

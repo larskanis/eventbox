@@ -161,6 +161,17 @@ class Eventbox
 
   # Create a proc object for asynchronous (fire-and-forget) calls similar to {async_call}.
   #
+  # It can be passed to external scope and called from there like so:
+  #
+  #   class MyBox < Eventbox
+  #     sync_call def print(p1)
+  #       async_proc do |p2|
+  #         puts "#{p1} #{p2}"
+  #       end
+  #     end
+  #   end
+  #   MyBox.new.print("Hello").call("world")   # Prints "Hello world"
+  #
   # The created object can be safely called from any thread.
   # All block arguments are passed through the {Sanitizer}.
   # The block itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
@@ -172,6 +183,17 @@ class Eventbox
   end
 
   # Create a Proc object for synchronous calls similar to {sync_call}.
+  #
+  # It can be passed to external scope and called from there like so:
+  #
+  #   class MyBox < Eventbox
+  #     sync_call def print(p1)
+  #       sync_proc do |p2|
+  #         "#{p1} #{p2}"
+  #       end
+  #     end
+  #   end
+  #   puts MyBox.new.print("Hello").call("world")   # Prints "Hello world"
   #
   # The created object can be safely called from any thread.
   # All block arguments as well as the result value are passed through the {Sanitizer}.
@@ -187,10 +209,22 @@ class Eventbox
 
   # Create a Proc object for calls with deferred result similar to {yield_call}.
   #
+  # It can be passed to external scope and called from there like so:
+  #
+  #   class MyBox < Eventbox
+  #     sync_call def print(p1)
+  #       yield_proc do |p2, result|
+  #         result.yield "#{p1} #{p2}"
+  #       end
+  #     end
+  #   end
+  #   puts MyBox.new.print("Hello").call("world")   # Prints "Hello world"
+  #
   # This proc type is simular to {sync_proc}, however it's not the result of the block that is returned.
   # Instead the block is called with one additional argument internally, which is used to yield a result value.
   # The result value can be yielded within the called block, but it can also be called by any other internal or external method, leading to a deferred proc return.
   # The external thread calling this proc is suspended until a result is yielded.
+  # However the Eventbox object keeps responsive to calls from other threads.
   #
   # The created object can be safely called from any thread.
   # If yield procs are called internally, they must get a Proc object as the last argument.

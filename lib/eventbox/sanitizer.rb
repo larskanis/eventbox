@@ -276,7 +276,7 @@ class Eventbox
   #   end
   #   Callback.new {|num| num + 1 }    # Output: 6
   #
-  # External Proc objects can also be passed to actions or to extern.
+  # External Proc objects can also be passed to action or to external scope.
   # In this case a {ExternalProc} is unwrapped back to an ordinary Proc object.
   class ExternalProc < WrappedProc
     attr_reader :name

@@ -7,7 +7,7 @@ _Manage multithreading with the safety of event based programming_
 
 {Eventbox} objects are event based and single threaded from the inside but thread safe and blocking from the outside.
 Eventbox enforces a separation of code for event processing and code running blocking operations.
-All code inside an {Eventbox} object is executed non-concurrently and hence must not do any blocking operations.
+All code inside an {Eventbox} object is executed non-concurrently and hence shouldn't do any blocking operations.
 
 In the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
 Communication between actions and event processing is done through ordinary method calls.
@@ -190,44 +190,72 @@ Since Eventbox protects from data races, it's insignificant in which order event
 It's therefore OK to set `@downloads` both before or after starting the action threads per `start_download` in `init`.
 
 
-## Call types
+## Method call types
 
-Eventbox offers 3 call types for internal scope:
+Eventbox offers 3 different types of external callable methods:
 
-* {Eventbox.yield_call} defines a blocking or non-blocking method with return value. It is the most flexible call type.
-* {Eventbox.sync_call} is a convenience version of yield_call for a non-blocking method with return value.
-* {Eventbox.async_call} is a convenience version of yield_call for a non-blocking method without return value.
+* {Eventbox.yield_call yield_call} defines a blocking or non-blocking method with return value.
+  It is the most flexible call type.
+* {Eventbox.sync_call sync_call} is a convenience version of `yield_call` for a non-blocking method with return value.
+* {Eventbox.async_call async_call} is a convenience version of `yield_call` for a non-blocking method without return value.
 
-Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+They can be defined with `private`, `protected` or `public` visibility.
+The method body is referred to as internal scope of a given Eventbox object.
+All code in the internal scope is event based and shouldn't do any blocking operations.
 
-Similary there are 3 types of proc objects which act as anonymous versions of the above method call types.
+There are also accessor methods usable as known from ordinary ruby objects: {Eventbox.attr_reader attr_reader},  {Eventbox.attr_writer attr_writer} and  {Eventbox.attr_accessor attr_accessor}.
+They allow thread safe access to instance variables.
 
-* {Eventbox#yield_proc} allocates a blocking or non-blocking proc object with a return value.
-* {Eventbox#sync_proc} allocates a Proc object for a non-blocking piece of code with return value.
-* {Eventbox#async_proc} allocates a Proc object for a non-blocking piece of code without return value.
+Beside {Eventbox.async_call async_call}, {Eventbox.sync_call sync_call} and {Eventbox.yield_call yield_call} methods it's possible to define ordinary `private` methods, since they are not accessible externally.
+However any ordinary `public` or `protected` methods within Eventbox classes are rejected.
 
-There are also accessor methods usable as known from ordinary ruby objects: {Eventbox.attr_reader},  {Eventbox.attr_writer} and  {Eventbox.attr_accessor}.
+{Eventbox.action Action} methods are very different from the above.
+They run concurrently to all internal methods within their own thread.
+Although actions reside within the same class they don't share instance variables with internal scope.
+However they can safely call all instance methods.
+The method body is referred to as action scope.
 
-{Eventbox.action Action} methods are very different to the above.
-They run in parallel to all internal methods within their own thread.
+All code outside of internal or action scope is referred to as external scope.
 
 
-## How does it work?
+## Block and Proc call types
 
-Eventbox distinguish between internal and external scope:
+Similary to the 3 method calls above there are 3 types of proc objects which act as anonymous counterparts of the method call types.
 
-* Internal scope is within methods defined by {Eventbox.async_call}, {Eventbox.sync_call} or {Eventbox.yield_call}.
-* External scope are all callers outside of the particular Eventbox object.
-* External scope are also methods defined by {Eventbox.action}, although they can call object internal methods and although they reside within the same class.
+* {Eventbox#yield_proc yield_proc} allocates a blocking or non-blocking proc object with a return value.
+  It is the most flexible proc type.
+* {Eventbox#sync_proc sync_proc} is a convenience version of yield_proc for a non-blocking code block with return value.
+* {Eventbox#async_proc async_proc} is a convenience version of yield_proc for a non-blocking code block without return value.
 
-At each change of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
+These proc objects can be created within internal scope, can be passed to external scope and called from there.
+
+The other way around - Proc objects or blocks which are defined in external or action scope - can be passed to internal scope.
+Such a Proc object is wrapped as a {Eventbox::ExternalProc} object within the internal scope.
+There it can be called as usual - however the execution of the proc doesn't stall the Eventbox object.
+Instead the internal method is executed until its end, while the block is executed within the thread which has called the current internal method.
+Optionally the block can be called with a completion block as the last argument, which is called with the result of the external proc when it has finished.
+
+
+## What is safe and what isn't?
+
+At each transition of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
 It protects the internal scope from data races and arbitrates between blocking and event based semantics.
 This is done by copying or wrapping the objects conveniently as described in the {Eventbox::Sanitizer}.
 That way internal methods never get an inconsistent state regardless of the activities of external threads.
 
-However Eventbox doesn't protect external scope and action scope from threading issues.
-External scope is recognized as only one common space.
-External libraries and objects must be threadsafe on its own if used from different threads.
+Obviously it's not safe to do things like using `send` to call private methods from external, access instance variables per `instance_variable_set` or use global variables in a multithreading context.
+Such rough ways of communication with an Eventbox object are surely neither recommended nor supported.
+Other than these the internal scope of an Eventbox instance is pretty well protected against accident mistakes.
+
+However there's a catch which needs to take note of:
+It is not restricted to access any constants from internal scope.
+Therefore it's possible to call for example `Thread.new` within internal scope.
+Unsurprisingly is a very bad idea, since the provided block is called with no synchronization and can therefore lead to all kind of threading issues.
+It would be safe to call `Thread.new` with an {Eventbox#async_proc async_proc}, however since the proc is not allowed to do any blocking operations, it's recommended to use an {Eventbox.action action} method definition instead to spawn threads.
+
+Also note that Eventbox doesn't protect external scope or action scope from threading issues.
+The external scope is recognized as one common space.
+External libraries and objects must be threadsafe on its own if used from different threads in external or action scope.
 Protecting them is beyond the scope of Eventbox.
 
 
