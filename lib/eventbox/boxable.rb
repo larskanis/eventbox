@@ -183,7 +183,8 @@ class Eventbox
     # All method arguments are passed through the {Sanitizer}.
     #
     # Actions can return state changes or objects to the event loop by calls to methods created by {async_call}, {sync_call} or {yield_call} or through calling {async_proc}, {sync_proc} or {yield_proc} objects.
-    # To avoid unsafe shared objects, the action block doesn't have access to local variables or instance variables.
+    # To avoid unsafe shared objects, an action has it's own set of local variables or instance variables.
+    # It doesn't have access to variables defined by other methods.
     #
     # The {Action} object can be used to interrupt the program execution by an exception.
     # See {Eventbox::Action} for further information.
@@ -220,7 +221,8 @@ class Eventbox
     end
   end
 
-  # An Action object is returned by {Eventbox#action} and optionally passed as last argument. It can be used to interrupt the program execution by an exception.
+  # An Action object is returned by {Eventbox#action} and optionally passed as last argument.
+  # It can be used to interrupt the program execution by an exception.
   #
   # However in contrast to ruby's builtin threads, by default any exceptions sent to the action thread are delayed until a code block is reached which explicit allows interruption.
   # The only exception which is delivered to the action thread by default is {Eventbox::AbortAction}.
