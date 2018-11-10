@@ -510,12 +510,6 @@ class TestInitWithPendingAction < Eventbox
   end
 end
 
-def test_100_init_with_pending_action
-  100.times do
-    TestInitWithPendingAction.new
-  end
-end
-
 def test_several_instances_running_actions_dont_interfere
   ec = Class.new(Eventbox) do
     yield_call def init(result)

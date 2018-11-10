@@ -4,6 +4,12 @@ class EventboxActionTest < Minitest::Test
 
   eval_file "eventbox/action_test_collection.rb"
 
+  def test_100_init_with_pending_action
+    100.times do
+      TestInitWithPendingAction.new
+    end
+  end
+
   def test_shutdown
     GC.start    # Try to sweep other pending threads
     sleep 0.1
