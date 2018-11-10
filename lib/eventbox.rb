@@ -54,12 +54,12 @@ class Eventbox
   #
   # @param threadpool [Object] A threadpool.
   #   Can be either +Thread+ (default) or a {Eventbox::Threadpool} instance.
-  # @param guard_time Internal methods should not do blocking operations.
-  #   Eventbox measures the time of each call to internal methods and warns, when it is exceeded.
+  # @param guard_time Event scope methods should not do blocking operations.
+  #   Eventbox measures the time of each call to event scope methods and warns, when it is exceeded.
   #   There are several ways to configure guard_time:
-  #   * Set to +nil+: Disable measuring of time to process internal methods.
-  #   * Set to a +Numeric+ value: Maximum number of seconds allowed for internal methods.
-  #   * Set to a +Proc+ object: Called after each call to an internal method.
+  #   * Set to +nil+: Disable measuring of time to process event scope methods.
+  #   * Set to a +Numeric+ value: Maximum number of seconds allowed for event scope methods.
+  #   * Set to a +Proc+ object: Called after each call to an event scope method.
   #     The +Proc+ object is called with the number of seconds the call took as first and the name as second argument.
   def self.with_options(**options)
     Class.new(self) do
@@ -201,7 +201,7 @@ class Eventbox
   # Instead use {Eventbox.action} in these cases.
   #
   # This Proc is simular to {async_proc}, but when the block is invoked, it is executed and it's return value is returned to the caller.
-  # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync procs can only return immediate values.
+  # Since all processing within the event scope of an {Eventbox} instance must not execute blocking operations, sync procs can only return immediate values.
   # For deferred results use {yield_proc} instead.
   def sync_proc(name=nil, &block)
     @__event_loop__.new_sync_proc(name=nil, &block)
@@ -221,13 +221,13 @@ class Eventbox
   #   puts MyBox.new.print("Hello").call("world")   # Prints "Hello world"
   #
   # This proc type is simular to {sync_proc}, however it's not the result of the block that is returned.
-  # Instead the block is called with one additional argument internally, which is used to yield a result value.
-  # The result value can be yielded within the called block, but it can also be called by any other internal or external method, leading to a deferred proc return.
+  # Instead the block is called with one additional argument in the event scope, which is used to yield a result value.
+  # The result value can be yielded within the called block, but it can also be called by any other event scope or external method, leading to a deferred proc return.
   # The external thread calling this proc is suspended until a result is yielded.
   # However the Eventbox object keeps responsive to calls from other threads.
   #
   # The created object can be safely called from any thread.
-  # If yield procs are called internally, they must get a Proc object as the last argument.
+  # If yield procs are called in the event scope, they must get a Proc object as the last argument.
   # It is called when a result was yielded.
   #
   # All block arguments as well as the result value are passed through the {Sanitizer}.
@@ -241,7 +241,7 @@ class Eventbox
   #
   # A marked object is never passed as copy, but passed as reference.
   # The object is therefore wrapped as {InternalObject} or {ExternalObject} when used in an unsafe scope.
-  # Wrapping as {InternalObject} or {ExternalObject} denies access from external scope to internal objects and vice versa.
+  # Wrapping as {InternalObject} or {ExternalObject} denies access from external scope to event scope objects and vice versa.
   # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
   # It can therefore be used to modify the original object even after traversing the boundary.
   #
@@ -258,7 +258,7 @@ class Eventbox
   #
   # If {shutdown!} is called externally, it blocks until all actions threads terminated.
   #
-  # If {shutdown!} is called internally, it just triggers the termination of all action threads and returns afterwards.
+  # If {shutdown!} is called in the event scope, it just triggers the termination of all action threads and returns afterwards.
   # Optionally {shutdown!} can be called with a block.
   # It is called when all actions threads terminated.
   public def shutdown!(&completion_block)

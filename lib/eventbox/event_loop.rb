@@ -1,7 +1,7 @@
 class Eventbox
   # @private
   #
-  # This class manages the calls to internal methods and procs comparable to an event loop.
+  # This class manages the calls to event scope methods and procs comparable to an event loop.
   # It doesn't use an explicit event loop, but uses the calling thread to process the event.
   #
   # All methods prefixed with "_" requires @mutex acquired to be called.
@@ -53,7 +53,7 @@ class Eventbox
 
     def shutdown(&completion_block)
       send_shutdown
-      if internal_thread?
+      if event_scope?
         if completion_block
           completion_block = new_async_proc(&completion_block)
 
@@ -74,13 +74,13 @@ class Eventbox
       @running_actions_for_gc = @running_actions.dup
     end
 
-    # Is the caller running within the internal context?
-    def internal_thread?
+    # Is the caller running within the event scope context?
+    def event_scope?
       @mutex.owned?
     end
 
     def synchronize_external
-      if internal_thread?
+      if event_scope?
         yield
       else
         @mutex.synchronize do
@@ -157,8 +157,8 @@ class Eventbox
 
     def new_async_proc(name=nil, &block)
       AsyncProc.new do |*args, &arg_block|
-        if internal_thread?
-          # called internally
+        if event_scope?
+          # called in the event scope
           block.yield(*args, &arg_block)
         else
           # called externally
@@ -173,8 +173,8 @@ class Eventbox
 
     def new_sync_proc(name=nil, &block)
       SyncProc.new do |*args, &arg_block|
-        if internal_thread?
-          # called internally
+        if event_scope?
+          # called in the event scope
           block.yield(*args, &arg_block)
         else
           # called externally
@@ -189,8 +189,8 @@ class Eventbox
 
     def new_yield_proc(name=nil, &block)
       YieldProc.new do |*args, &arg_block|
-        if internal_thread?
-          # called internally
+        if event_scope?
+          # called in the event scope
           safe_yield_result(args, block)
           block.yield(*args, &arg_block)
           nil
@@ -209,9 +209,9 @@ class Eventbox
       complete = args.last
       unless Proc === complete
         if Proc === name
-          raise InvalidAccess, "yield_proc #{name.inspect} must be called with a Proc object internally but got #{complete.class}"
+          raise InvalidAccess, "yield_proc #{name.inspect} must be called with a Proc object in the event scope but got #{complete.class}"
         else
-          raise InvalidAccess, "yield_call `#{name}' must be called with a Proc object internally but got #{complete.class}"
+          raise InvalidAccess, "yield_call `#{name}' must be called with a Proc object in the event scope but got #{complete.class}"
         end
       end
       args[-1] = proc do |*cargs, &cblock|
@@ -245,12 +245,12 @@ class Eventbox
     end
 
     def wrap_proc(arg, name)
-      if internal_thread?
+      if event_scope?
         InternalObject.new(arg, self, name)
       else
         ExternalProc.new(arg, self, name) do |*args, &block|
-          if internal_thread?
-            # called internally
+          if event_scope?
+            # called in the event scope
             if block && !(WrappedProc === block)
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
             end
@@ -284,7 +284,7 @@ class Eventbox
 
     # Mark an object as to be shared instead of copied.
     def shared_object(object)
-      if internal_thread?
+      if event_scope?
         ObjectRegistry.set_tag(object, self)
       else
         ObjectRegistry.set_tag(object, ExternalSharedObject)
@@ -308,7 +308,7 @@ class Eventbox
         @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
         nil
       else
-        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or internal proc")
+        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or event scope proc")
       end
     end
 

@@ -1,7 +1,7 @@
 class Eventbox
   # Module for argument and result value sanitation.
   #
-  # All call arguments and result values between external and internal an vice versa are passed through the Sanitizer.
+  # All call arguments and result values between external and event scope an vice versa are passed through the Sanitizer.
   # This filter is required to prevent data races through shared objects or non-synchonized proc execution.
   # It also wraps blocks and Proc objects to arbitrate between external blocking behaviour and internal event based behaviour.
   #
@@ -28,9 +28,9 @@ class Eventbox
   # * If the object is marshalable, it is passed as a deep copy through `Marshal.dump` and `Marshal.load` .
   # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
   # * If the object can't be marshaled or dissected, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow.
-  # * Proc objects passed from internal to external are wrapped as {InternalObject}.
-  #   They are unwrapped when passed back to internal.
-  # * Proc objects passed from external to internal are wrapped as {ExternalProc}.
+  # * Proc objects passed from event scope to external are wrapped as {InternalObject}.
+  #   They are unwrapped when passed back to event scope.
+  # * Proc objects passed from external to event scope are wrapped as {ExternalProc}.
   #   They are unwrapped when passed back to external.
   module Sanitizer
     module_function
@@ -151,7 +151,7 @@ class Eventbox
       else
         # Check if the object has been tagged
         case ObjectRegistry.get_tag(arg)
-        when EventLoop # Internal object marked as shared_object
+        when EventLoop # Event scope object marked as shared_object
           InternalObject.new(arg, source_event_loop, name)
         when ExternalSharedObject # External object marked as shared_object
           ExternalObject.new(arg, source_event_loop, name)
@@ -192,7 +192,7 @@ class Eventbox
                 end
               end
             rescue TypeError
-              # Object not copyable -> wrap object as internal or external object
+              # Object not copyable -> wrap object as event scope or external object
               sanitize_value(source_event_loop.shared_object(arg), source_event_loop, target_event_loop, name)
             end
 
@@ -208,7 +208,7 @@ class Eventbox
     end
   end
 
-  # Base wrapper class for objects created internal or external.
+  # Base wrapper class for objects created in event scope or external.
   class WrappedObject
     attr_reader :name
     def initialize(object, event_loop, name=nil)
@@ -223,9 +223,9 @@ class Eventbox
     end
   end
 
-  # Generic wrapper for objects created internal within some Eventbox instance.
+  # Generic wrapper for objects created in the event scope of some Eventbox instance.
   #
-  # Access to the internal object from outside of the event loop is denied, but the wrapper object can be stored and passed back to internal to unwrap it.
+  # Access to the object from external or action scope is denied, but the wrapper object can be stored and passed back to event scope to unwrap it.
   class InternalObject < WrappedObject
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
@@ -234,37 +234,37 @@ class Eventbox
 
   # Generic wrapper for objects created external of some Eventbox instance.
   #
-  # Access to the external object from the event loop is denied, but the wrapper object can be stored and passed back to external (or passed to actions) to unwrap it.
+  # Access to the external object from the event scope is denied, but the wrapper object can be stored and passed back to external or action scope to unwrap it.
   class ExternalObject < WrappedObject
     def object_for(target_event_loop)
       target_event_loop == :extern ? @object : self
     end
   end
 
-  # Base class for Proc objects created internal or external.
+  # Base class for Proc objects created in any scope.
   class WrappedProc < Proc
   end
 
-  # Base class for Proc objects created internal within some Eventbox instance.
+  # Base class for Proc objects created in the event scope of some Eventbox instance.
   class InternalProc < WrappedProc
   end
 
-  # Proc objects created intern within some Eventbox instance per {Eventbox#async_proc}
+  # Proc objects created in the event scope of some Eventbox instance per {Eventbox#async_proc}
   class AsyncProc < InternalProc
   end
 
-  # Proc objects created intern within some Eventbox instance per {Eventbox#sync_proc}
+  # Proc objects created in the event scope of some Eventbox instance per {Eventbox#sync_proc}
   class SyncProc < InternalProc
   end
 
-  # Proc objects created intern within some Eventbox instance per {Eventbox#yield_proc}
+  # Proc objects created in the event scope of some Eventbox instance per {Eventbox#yield_proc}
   class YieldProc < InternalProc
   end
 
   # Wrapper for Proc objects created external of some Eventbox instance.
   #
-  # External Proc objects can be invoked from internal {Eventbox.sync_call} and {Eventbox.yield_call} methods.
-  # Optionally a proc can be provided as the last argument.
+  # External Proc objects can be invoked from event scope through {Eventbox.sync_call} and {Eventbox.yield_call} methods.
+  # Optionally a proc can be provided as the last argument which acts as a completion callback.
   # This proc is invoked, when the call has finished, with the result value as argument.
   #
   #   class Callback < Eventbox

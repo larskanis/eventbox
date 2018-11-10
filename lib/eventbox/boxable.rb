@@ -47,7 +47,7 @@ class Eventbox
     def async_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        if @__event_loop__.internal_thread?
+        if @__event_loop__.event_scope?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
           unbound_method.bind(eventbox).call(*args, &cb)
@@ -66,7 +66,7 @@ class Eventbox
     #
     # The created method can be safely called from any thread.
     # It is simular to {async_call}, but the method waits until the method body is executed and returns its return value.
-    # Since all internal processing within a {Eventbox} instance must not involve blocking operations, sync calls can only return immediate values.
+    # Since all processing within the event scope of an {Eventbox} instance must not involve blocking operations, sync calls can only return immediate values.
     # For deferred results use {yield_call} instead.
     #
     # It's possible to call external blocks or proc objects from {sync_call} methods.
@@ -78,7 +78,7 @@ class Eventbox
     def sync_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        if @__event_loop__.internal_thread?
+        if @__event_loop__.event_scope?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
           args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
@@ -95,15 +95,15 @@ class Eventbox
     # Define a method for calls with deferred result.
     #
     # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
-    # Instead the method is called with one additional argument internally, which is used to yield a result value.
+    # Instead the method is called with one additional argument in the event scope, which is used to yield a result value.
     # In contrast to a +return+ statement, the execution of the method continues after yielding a result.
     #
-    # The result value can be yielded within the called method, but it can also be stored and called by any other internal or external method, leading to a deferred method return.
+    # The result value can be yielded within the called method, but it can also be stored and called by any other event scope or external method, leading to a deferred method return.
     # The external thread calling this method is suspended until a result is yielded.
     # However the Eventbox object keeps responsive to calls from other threads.
     #
     # The created method can be safely called from any thread.
-    # If yield methods are called internally, they must get a Proc object as the last argument.
+    # If yield methods are called in the event scope, they must get a Proc object as the last argument.
     # It is called when a result was yielded.
     #
     # It's possible to call external blocks or proc objects from {yield_call} methods up to the point when the result was yielded.
@@ -115,7 +115,7 @@ class Eventbox
     def yield_call(name, &block)
       unbound_method = nil
       with_block_or_def(name, block) do |*args, &cb|
-        if @__event_loop__.internal_thread?
+        if @__event_loop__.event_scope?
           @__event_loop__.safe_yield_result(args, name)
           unbound_method.bind(eventbox).call(*args, &cb)
           self
@@ -195,8 +195,8 @@ class Eventbox
     #   action def do_something(str, action)
     #     str              # => "value1"
     #     action.current?  # => true
-    #     # `action' can be passed to some internal or external method,
-    #     # to send a signal per Action#raise
+    #     # `action' can be passed to event scope or external scope,
+    #     # in order to send a signals per Action#raise
     #   end
     #
     def action(name, &block)
@@ -209,7 +209,7 @@ class Eventbox
         sandbox.instance_variable_set(:@__eventbox__, WeakRef.new(self))
         meth = unbound_method.bind(sandbox)
 
-        if @__event_loop__.internal_thread?
+        if @__event_loop__.event_scope?
           args = Sanitizer.sanitize_values(args, @__event_loop__, :extern)
         end
         # Start a new action thread and return an Action instance
@@ -272,7 +272,7 @@ class Eventbox
         ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
       end
 
-      if @event_loop.internal_thread?
+      if @event_loop.event_scope?
         args = Sanitizer.sanitize_values(args, @event_loop, :extern)
       end
       @thread.raise(*args)

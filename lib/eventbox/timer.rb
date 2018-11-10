@@ -26,7 +26,7 @@ class Eventbox
   #
   # Both functions return an Alarm object which can be used to cancel the alarm through timer_cancel.
   #
-  # timer_after, timer_every and timer_cancel can be used within the class, in actions and from external scope.
+  # timer_after, timer_every and timer_cancel can be used within the event scope, in actions and from external scope.
   #
   # {Timer} always uses one action thread per Eventbox object, regardless of the number of scheduled timers.
   module Timer
