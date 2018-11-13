@@ -224,7 +224,7 @@ Although actions reside within the same class they don't share instance variable
 However they can safely call all instance methods.
 The method body is referred to as "action scope".
 
-Eventbox doesn't provide specific methods for asynchronous IO, but relies on ruby's builtin methods for this purpose.
+Eventbox doesn't provide specific methods for asynchronous IO, but relies on ruby's builtin methods or gems for this purpose.
 The intention is, that IO or any other blocking calls are done through {Eventbox.action action} methods.
 In contrast to event scope, they should not share any data with other actions or threads.
 Instead a shared-nothing approach is the recommended way to build actions.
@@ -325,6 +325,13 @@ This was the primary motivation to develop this library.
 
 ## Comparison with other threading abstractions
 
+### The Actor model
+
+Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model).
+While the actor model uses explicit message passing, Eventbox relies on method and closure calls, which makes it much more natural to use.
+Unlike an actor, Eventbox doesn't start a thread per object by default, but uses the thread of the caller to execute non-blocking code.
+Instead it can create and interrupt in-object private threads in form of actions to be used for blocking operations.
+
 ### Internal state
 
 Eventbox keeps all instance variables in a consistent state as a whole.
@@ -336,7 +343,7 @@ Unfortunately this is often wrong: They require a lot of experience to avoid mis
 ### Data races
 
 Most thread abstractions don't do deeper checks for wrong usage of data.
-In particular they don't protect from data races.
+In particular they don't protect from data races like Eventbox does.
 Ruby doesn't (yet) have mechanisms to bind objects to threads, so that there's no builtin safety.
 
 ### Blocking and non-blocking scope
