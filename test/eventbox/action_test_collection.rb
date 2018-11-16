@@ -307,10 +307,12 @@ end
 
 class TestActionRaise < Eventbox
   class Stop < Interrupt
-    def initialize(result)
+    def initialize(result, value)
       @result = result
+      @value = value
     end
     attr_reader :result
+    attr_reader :value
   end
 
   async_call def init
@@ -322,11 +324,11 @@ class TestActionRaise < Eventbox
       sleep
     end
   rescue Stop => err
-    err.result.yield(err)
+    err.result.yield(err, err.value.class)
   end
 
   yield_call def stop(result)
-    @a.raise(Stop, result)
+    @a.raise Stop.new(result, IO.pipe[0])
   end
 
   attr_reader :a
@@ -336,7 +338,9 @@ def test_action_raise
   eb = TestActionRaise.new
   assert_kind_of Eventbox::Action, eb.a
   assert_equal :sleepy, eb.a.name
-  assert_kind_of TestActionRaise::Stop, eb.stop
+  err, err_klass = eb.stop
+  assert_kind_of TestActionRaise::Stop, err
+  assert_equal Eventbox::InternalObject, err_klass
 end
 
 def test_action_abort_in_init

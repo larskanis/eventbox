@@ -793,18 +793,23 @@ class EventboxCallTest < Minitest::Test
   end
 
   class MyError < RuntimeError
+    def initialize(value=nil)
+      @value = value
+    end
+    attr_reader :value
   end
 
   def test_yield_call_with_raise
     eb = Class.new(Eventbox) do
       yield_call def go(result)
-        result.raise MyError
+        result.raise MyError.new(IO.pipe[0])
         @num = 123
       end
       attr_reader :num
     end.new
 
-    assert_raises(MyError) { eb.go }
+    err = assert_raises(MyError) { eb.go }
+    assert_kind_of Eventbox::InternalObject, err.value
     assert_equal 123, eb.num
   end
 
@@ -815,18 +820,19 @@ class EventboxCallTest < Minitest::Test
       end
 
       action def process(result)
-        result.raise MyError
+        result.raise MyError.new(IO.pipe[0])
       end
     end
 
-    assert_raises(MyError) { fc.new }
+    err = assert_raises(MyError) { fc.new }
+    assert_kind_of IO, err.value
   end
 
   def test_yield_proc_with_raise
     eb = Class.new(Eventbox) do
       sync_call def go
         yield_proc do |result|
-          result.raise MyError
+          result.raise MyError.new(IO.pipe[0])
           @num = 123
         end
       end
@@ -834,7 +840,8 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     pr = eb.go
-    assert_raises(MyError) { pr.call }
+    err = assert_raises(MyError) { pr.call }
+    assert_kind_of Eventbox::InternalObject, err.value
     assert_equal 123, eb.num
   end
 
@@ -847,12 +854,13 @@ class EventboxCallTest < Minitest::Test
       end
 
       action def process(result)
-        result.raise MyError
+        result.raise MyError.new(IO.pipe[0])
       end
     end
 
     pr = fc.new.go
-    assert_raises(MyError) { pr.call }
+    err = assert_raises(MyError) { pr.call }
+    assert_kind_of IO, err.value
   end
 
   def test_yield_call_with_raise_and_yield
