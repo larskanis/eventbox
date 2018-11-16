@@ -261,6 +261,32 @@ class Eventbox
   class YieldProc < InternalProc
   end
 
+  WrappedException = Struct.new(:exc)
+
+  # Proc object provided as the last argument of {Eventbox.yield_call} and {Eventbox#yield_proc}.
+  class CompletionProc < AsyncProc
+    # Raise an exception in the context of the waiting {Eventbox.yield_call} or {Eventbox#yield_proc} method.
+    #
+    # This allows to raise an exception to the calling scope from external or action scope:
+    #
+    #   class MyBox < Eventbox
+    #     yield_call def init(result)
+    #       process(result)
+    #     end
+    #
+    #     action def process(result)
+    #       result.raise RuntimeError, "raise from action MyBox#process"
+    #     end
+    #   end
+    #   MyBox.new   # => raises RuntimeError (raise from action MyBox#process)
+    #
+    # In contrast to a direct call of `Kernel.raise`, calling this method doesn't abort the current context.
+    # Instead when in the event scope, raising the exception is deferred until returning to the calling external or action scope.
+    def raise(*args)
+      self.call(WrappedException.new(args))
+    end
+  end
+
   # Wrapper for Proc objects created external of some Eventbox instance.
   #
   # External Proc objects can be invoked from event scope through {Eventbox.sync_call} and {Eventbox.yield_call} methods.

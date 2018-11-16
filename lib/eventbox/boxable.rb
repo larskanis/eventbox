@@ -95,7 +95,7 @@ class Eventbox
     # Define a method for calls with deferred result.
     #
     # This call type is simular to {sync_call}, however it's not the result of the method that is returned.
-    # Instead the method is called with one additional argument in the event scope, which is used to yield a result value.
+    # Instead the method is called with one {CompletionProc additional argument} in the event scope, which is used to yield a result value or raise an exception.
     # In contrast to a +return+ statement, the execution of the method continues after yielding a result.
     #
     # The result value can be yielded within the called method, but it can also be stored and called by any other event scope or external method, leading to a deferred method return.

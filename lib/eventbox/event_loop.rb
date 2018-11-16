@@ -155,8 +155,8 @@ class Eventbox
       end
     end
 
-    def new_async_proc(name=nil, &block)
-      AsyncProc.new do |*args, &arg_block|
+    def new_async_proc(name=nil, klass=AsyncProc, &block)
+      klass.new do |*args, &arg_block|
         if event_scope?
           # called in the event scope
           block.yield(*args, &arg_block)
@@ -229,7 +229,7 @@ class Eventbox
     end
 
     private def _result_proc(answer_queue, name)
-      new_async_proc(name) do |*resu|
+      new_async_proc(name, CompletionProc) do |*resu|
         unless answer_queue
           if Proc === name
             raise MultipleResults, "received multiple results for #{name.inspect}"
@@ -268,13 +268,16 @@ class Eventbox
       loop do
         rets = answer_queue.deq
         case rets
-        when EventLoop::Callback
+        when Callback
           cbres = rets.block.yield(*rets.args, &rets.arg_block)
 
           if rets.cbresult
             cbres = Sanitizer.sanitize_value(cbres, self, self)
             external_proc_result(rets.cbresult, cbres)
           end
+        when WrappedException
+          answer_queue.close if answer_queue.respond_to?(:close)
+          raise(*rets.exc)
         else
           answer_queue.close if answer_queue.respond_to?(:close)
           return rets

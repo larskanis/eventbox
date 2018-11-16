@@ -791,4 +791,78 @@ class EventboxCallTest < Minitest::Test
     end
     assert_equal "abcdefgdefhi", res
   end
+
+  class MyError < RuntimeError
+  end
+
+  def test_yield_call_with_raise
+    eb = Class.new(Eventbox) do
+      yield_call def go(result)
+        result.raise MyError
+        @num = 123
+      end
+      attr_reader :num
+    end.new
+
+    assert_raises(MyError) { eb.go }
+    assert_equal 123, eb.num
+  end
+
+  def test_yield_call_with_raise_from_action
+    fc = Class.new(Eventbox) do
+      yield_call def init(result)
+        process(result)
+      end
+
+      action def process(result)
+        result.raise MyError
+      end
+    end
+
+    assert_raises(MyError) { fc.new }
+  end
+
+  def test_yield_proc_with_raise
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        yield_proc do |result|
+          result.raise MyError
+          @num = 123
+        end
+      end
+      attr_reader :num
+    end.new
+
+    pr = eb.go
+    assert_raises(MyError) { pr.call }
+    assert_equal 123, eb.num
+  end
+
+  def test_yield_proc_with_raise_from_action
+    fc = Class.new(Eventbox) do
+      sync_call def go
+        yield_proc do |result|
+          process(result)
+        end
+      end
+
+      action def process(result)
+        result.raise MyError
+      end
+    end
+
+    pr = fc.new.go
+    assert_raises(MyError) { pr.call }
+  end
+
+  def test_yield_call_with_raise_and_yield
+    eb = Class.new(Eventbox) do
+      yield_call def go(result)
+        result.raise MyError
+        result.yield 123
+      end
+    end.new
+
+    assert_raises(Eventbox::MultipleResults) { eb.go }
+  end
 end

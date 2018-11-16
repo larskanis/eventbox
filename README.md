@@ -8,6 +8,7 @@ _Manage multithreading with the safety of event based programming_
 {Eventbox} objects are event based and single threaded from the inside but thread-safe and blocking from the outside.
 Eventbox enforces a separation of code for event processing and code running blocking operations.
 Code inside an {Eventbox} object is executed non-concurrently and hence shouldn't do any blocking operations.
+This is similar to the typical JavaScript programming style.
 
 On the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
 Communication between actions and event processing is done through ordinary method calls.
@@ -16,7 +17,9 @@ An important task of Eventbox is to avoid race conditions through shared data.
 Such data races between event scope and external/action scope are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
-For better readability see the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+
+For better readability switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
 
 ## Requirements
@@ -237,7 +240,7 @@ In such cases it can be marked as {Eventbox#shared_object shared_object}.
 
 ### External scope
 
-All code outside of event scope or action scope is referred to as "external scope".
+Code outside of the Eventbox class is referred to as "external scope".
 
 
 ## Block and Proc types
@@ -256,6 +259,39 @@ Such a Proc object is wrapped as a {Eventbox::ExternalProc} object within the ev
 There it can be called as usual - however the execution of the proc doesn't stall the Eventbox object.
 Instead the event scope method is executed until its end, while the block is executed within the thread which has called the current event scope method.
 Optionally the block can be called with a completion block as the last argument, which is called with the result of the external proc when it has finished.
+
+
+## Exceptions
+
+Eventbox makes use of exceptions in several ways.
+
+All exceptions raised within the event scope are passed to the internal or external caller, like in ordinary ruby objects.
+It's also possible to raise deferred exceptions through the result proc of a {Eventbox#yield_call yield_call} or {Eventbox#yield_proc yield_proc}.
+See the {Eventbox::CompletionProc#raise} method.
+
+Exceptions raised in the action scope are not automatically passed to a caller, but must be handled appropriately by the Eventbox instance.
+It is recommended to handle exceptions in actions similar to the following, unless you're very sure, that no exception happens:
+
+```ruby
+action def start_connection(host, port)
+  sock = TCPSocket.new(host, port)
+rescue => err
+  conn_failed(err)
+else
+  conn_succeeded(sock)
+end
+
+async_call def conn_succeeded(sock)
+  # handle the success event (e.g. start communication by another action)
+end
+
+async_call def conn_failed(error)
+  # handle the failure event (retry or similar)
+end
+```
+
+Another use of exceptions is for sending signals to running actions.
+This is done by {Eventbox::Action#raise}.
 
 
 ## What is safe and what isn't?
@@ -327,10 +363,15 @@ This was the primary motivation to develop this library.
 
 ### The Actor model
 
-Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model).
-While the actor model uses explicit message passing, Eventbox relies on method and closure calls, which makes it much more natural to use.
+Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+While the actor model uses explicit message passing, Eventbox relies on method, closure calls and exceptions, which makes it much more natural to use.
 Unlike an actor, Eventbox doesn't start a thread per object by default, but uses the thread of the caller to execute non-blocking code.
-Instead it can create and interrupt in-object private threads in form of actions to be used for blocking operations.
+Instead it can create and manage in-object private threads in form of actions to be used for blocking operations.
+
+Many actor implementations manage an inheritance tree of actor objects.
+Parent actors are then notified about failures of child actors.
+In contrast Eventbox objects maintain a list of all running internal actions instead, but objects are completely independent from each other.
+Failures are handled object internal - see chapter "Exceptions" above.
 
 ### Internal state
 
