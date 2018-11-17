@@ -418,11 +418,11 @@ class EventboxCallTest < Minitest::Test
         pr = async_proc do |x|
           @n = x+"c"
         end
-        [pr.call(str+"b"), @n]
+        [pr.call(str+"b") == pr, @n]
       end
     end.new
 
-    assert_equal [nil, "abc"], fc.go("a")
+    assert_equal [true, "abc"], fc.go("a")
   end
 
   def test_async_proc_called_externally
@@ -436,7 +436,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     pr = fc.pr
-    assert_nil pr.call(123)
+    assert_same pr, pr.call(123)
     assert_equal 124, fc.n
   end
 
@@ -453,7 +453,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     pr = fc.pr
-    assert_nil pr.call { |n| n+"b" }
+    assert_same pr, pr.call { |n| n+"b" }
     assert_equal "abc", fc.n
   end
 

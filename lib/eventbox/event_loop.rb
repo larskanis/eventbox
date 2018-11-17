@@ -156,7 +156,7 @@ class Eventbox
     end
 
     def new_async_proc(name=nil, klass=AsyncProc, &block)
-      klass.new do |*args, &arg_block|
+      pr = klass.new do |*args, &arg_block|
         if event_scope?
           # called in the event scope
           block.yield(*args, &arg_block)
@@ -166,8 +166,7 @@ class Eventbox
           arg_block = Sanitizer.sanitize_value(arg_block, self, self)
           async_proc_call(block, args, arg_block)
         end
-        # Ideally async_proc{}.call would return the AsyncProc object to allow stacking like async_proc{}.call.call, but self is bound to the EventLoop object here.
-        nil
+        pr
       end
     end
 
