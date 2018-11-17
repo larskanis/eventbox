@@ -121,7 +121,7 @@ class Eventbox
 
     def yield_call(box, name, args, answer_queue, block)
       with_call_frame(name, answer_queue) do
-        box.send("__#{name}__", *args, _result_proc(answer_queue, name), &block)
+        box.send("__#{name}__", *args, _completion_proc(answer_queue, name), &block)
       end
     end
 
@@ -144,7 +144,7 @@ class Eventbox
     # Anonymous version of yield_call
     def yield_proc_call(pr, args, arg_block, answer_queue)
       with_call_frame(YieldProc, answer_queue) do
-        pr.yield(*args, _result_proc(answer_queue, pr), &arg_block)
+        pr.yield(*args, _completion_proc(answer_queue, pr), &arg_block)
       end
     end
 
@@ -228,7 +228,7 @@ class Eventbox
       end
     end
 
-    private def _result_proc(answer_queue, name)
+    private def _completion_proc(answer_queue, name)
       new_async_proc(name, CompletionProc) do |*resu|
         unless answer_queue
           if Proc === name
