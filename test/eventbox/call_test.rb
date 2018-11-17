@@ -348,6 +348,20 @@ class EventboxCallTest < Minitest::Test
     assert_equal "abcd", res
   end
 
+  def test_external_proc_called_internally_with_external_block
+    fc = Class.new(Eventbox) do
+      sync_call def go(pr)
+        pr.call(pr.class, &pr)
+      end
+    end.new
+
+    pr = proc do |ext_proc_klass, &block|
+      assert_equal Eventbox::ExternalProc, ext_proc_klass
+      assert_equal pr, block
+    end
+    fc.go(pr)
+  end
+
   def test_external_proc_called_internally_with_plain_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, result)
@@ -363,15 +377,25 @@ class EventboxCallTest < Minitest::Test
 
   def test_external_proc_called_internally_with_completion_block
     fc = Class.new(Eventbox) do
-      yield_call def go(pr, result)
-        pr.call(5, proc do |res|
-          result.yield res
+      yield_call def go(pr, ext_obj, result)
+        pr.call(5, ext_obj, ext_obj.class, IO.pipe[0], proc do |res|
+          result.yield res, ext_obj, ext_obj.class, IO.pipe[0]
         end)
       end
     end.new
 
-    pr = proc { |n| n + 1 }
-    assert_equal 6, fc.go(pr)
+    pr = proc do |n, ext_obj, ext_obj_klass, int_obj|
+      assert_kind_of IO, ext_obj
+      assert_equal Eventbox::ExternalObject, ext_obj_klass
+      assert_kind_of Eventbox::InternalObject, int_obj
+      [n + 1, IO.pipe[0]]
+    end
+
+    n, ext_obj, ext_obj_klass, int_obj = fc.go(pr, IO.pipe[0])
+    assert_equal 6, n
+    assert_kind_of IO, ext_obj
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
+    assert_kind_of Eventbox::InternalObject, int_obj
   end
 
   def test_external_object_invalid_access
@@ -449,14 +473,18 @@ class EventboxCallTest < Minitest::Test
   def test_sync_proc_called_externally
     fc = Class.new(Eventbox) do
       sync_call def pr
-        sync_proc do |n|
-          n + 1
+        sync_proc do |n, ext_obj|
+          [n + 1, ext_obj, ext_obj.class, IO.pipe[0]]
         end
       end
     end.new
 
     pr = fc.pr
-    assert_equal 124, pr.call(123)
+    n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
+    assert_equal 124, n
+    assert_kind_of IO, ext_obj
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
+    assert_kind_of Eventbox::InternalObject, int_obj
   end
 
   def test_async_proc_called_externally_denies_callback
@@ -545,14 +573,18 @@ class EventboxCallTest < Minitest::Test
   def test_yield_proc_called_externally
     fc = Class.new(Eventbox) do
       sync_call def pr
-        yield_proc do |n, result|
-          result.yield(n + 1)
+        yield_proc do |n, ext_obj, result|
+          result.yield(n + 1, ext_obj, ext_obj.class, IO.pipe[0])
         end
       end
     end.new
 
     pr = fc.pr
-    assert_equal 124, pr.call(123)
+    n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
+    assert_equal 124, n
+    assert_kind_of IO, ext_obj
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
+    assert_kind_of Eventbox::InternalObject, int_obj
   end
 
   def test_yield_proc_called_called_two_times
