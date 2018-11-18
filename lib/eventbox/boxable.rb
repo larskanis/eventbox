@@ -200,7 +200,7 @@ class Eventbox
         meth = unbound_method.bind(sandbox)
 
         if @__event_loop__.event_scope?
-          args = Sanitizer.sanitize_values(args, @__event_loop__, :extern)
+          args = Sanitizer.sanitize_values(args, @__event_loop__, nil)
         end
         # Start a new action thread and return an Action instance
         @__event_loop__.start_action(meth, name, args)
@@ -263,7 +263,7 @@ class Eventbox
       end
 
       if @event_loop.event_scope?
-        args = Sanitizer.sanitize_values(args, @event_loop, :extern)
+        args = Sanitizer.sanitize_values(args, @event_loop, nil)
       end
       @thread.raise(*args)
     end

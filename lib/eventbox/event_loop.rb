@@ -97,7 +97,7 @@ class Eventbox
     end
 
     def with_call_frame(name, answer_queue)
-      source_event_loop = Thread.current.thread_variable_get(:__event_loop__) || :extern
+      source_event_loop = Thread.current.thread_variable_get(:__event_loop__)
       @mutex.lock
       begin
         Thread.current.thread_variable_set(:__event_loop__, self)

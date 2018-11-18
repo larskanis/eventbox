@@ -196,10 +196,10 @@ class Eventbox
                 end
               end
             rescue TypeError
-              if source_event_loop == :extern
-                ObjectRegistry.set_tag(arg, ExternalSharedObject)
-              else
+              if source_event_loop
                 ObjectRegistry.set_tag(arg, source_event_loop)
+              else
+                ObjectRegistry.set_tag(arg, ExternalSharedObject)
               end
 
               # Object not copyable -> wrap object as event scope or external object
@@ -218,9 +218,9 @@ class Eventbox
     end
 
     def wrap_proc(arg, name, source_event_loop, target_event_loop)
-      if target_event_loop != :extern && target_event_loop.event_scope?
+      if target_event_loop&.event_scope?
         ExternalProc.new(arg, source_event_loop, name) do |*args, &block|
-          if target_event_loop != :extern && target_event_loop.event_scope?
+          if target_event_loop&.event_scope?
             # called in the event scope
             if block && !(WrappedProc === block)
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
