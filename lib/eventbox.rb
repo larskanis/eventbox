@@ -126,13 +126,6 @@ class Eventbox
 
   # @private
   #
-  # Used in Sanitizer
-  def event_loop
-    @__event_loop__
-  end
-
-  # @private
-  #
   # Provide access to the eventbox instance as either
   # - self within the eventbox instance itself or
   # - WeakRef.new(self).__getobj__ within actions.
@@ -247,7 +240,7 @@ class Eventbox
   #
   # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
   public def shared_object(object)
-    event_loop.shared_object(object)
+    @__event_loop__.shared_object(object)
   end
 
   # Force stop of all action threads spawned by this {Eventbox} instance
