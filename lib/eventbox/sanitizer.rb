@@ -20,18 +20,19 @@ class Eventbox
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
   #
   # The following rules apply for wrapping/unwrapping:
-  # * If the object has been marked as {Eventbox#shared_object}, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow (return value or call argument).
-  # * If the object is a {InternalObject}, {ExternalObject} or {ExternalProc} and fits to the target scope, it is unwrapped.
+  # * If the object has been marked as {Eventbox#shared_object}, it is wrapped as {WrappedObject} depending on the direction of the data flow (return value or call argument).
+  # * If the object is a {WrappedObject} or {ExternalProc} and fits to the target scope, it is unwrapped.
   # Both cases even work if the object is encapsulated by another object.
   #
   # In all other cases the following rules apply:
   # * If the object is marshalable, it is passed as a deep copy through `Marshal.dump` and `Marshal.load` .
   # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
-  # * If the object can't be marshaled or dissected, it is wrapped as {InternalObject} or {ExternalObject} depending on the direction of the data flow.
-  # * Proc objects passed from event scope to external are wrapped as {InternalObject}.
+  # * If the object can't be marshaled or dissected, it is wrapped as {WrappedObject}.
+  #   They are unwrapped when passed back to origin scope.
+  # * Proc objects passed from event scope to external are wrapped as {WrappedObject}.
   #   They are unwrapped when passed back to event scope.
   # * Proc objects passed from external to event scope are wrapped as {ExternalProc}.
-  #   They are unwrapped when passed back to external.
+  #   They are unwrapped when passed back to external scope.
   module Sanitizer
     module_function
 
@@ -147,14 +148,17 @@ class Eventbox
       when Eventbox # Eventbox objects already sanitize all inputs and outputs and are thread safe
         arg
       when Proc
-        source_event_loop.wrap_proc(arg, name)
+        wrap_proc(arg, name, source_event_loop, target_event_loop)
       else
         # Check if the object has been tagged
-        case ObjectRegistry.get_tag(arg)
+        case mel=ObjectRegistry.get_tag(arg)
         when EventLoop # Event scope object marked as shared_object
-          InternalObject.new(arg, source_event_loop, name)
+          unless mel == source_event_loop
+            raise InvalidAccess, "object #{arg.inspect} #{"wrapped by #{name} " if name} was marked as shared_object in a different eventbox object than the calling eventbox"
+          end
+          WrappedObject.new(arg, mel, name)
         when ExternalSharedObject # External object marked as shared_object
-          ExternalObject.new(arg, source_event_loop, name)
+          WrappedObject.new(arg, source_event_loop, name)
         else
           # Not tagged -> try to deep copy the object
           begin
@@ -192,8 +196,14 @@ class Eventbox
                 end
               end
             rescue TypeError
+              if source_event_loop == :extern
+                ObjectRegistry.set_tag(arg, ExternalSharedObject)
+              else
+                ObjectRegistry.set_tag(arg, source_event_loop)
+              end
+
               # Object not copyable -> wrap object as event scope or external object
-              sanitize_value(source_event_loop.shared_object(arg), source_event_loop, target_event_loop, name)
+              sanitize_value(arg, source_event_loop, target_event_loop, name)
             end
 
           else
@@ -206,9 +216,31 @@ class Eventbox
     def sanitize_values(args, source_event_loop, target_event_loop, name=nil)
       args.map { |arg| sanitize_value(arg, source_event_loop, target_event_loop, name) }
     end
+
+    def wrap_proc(arg, name, source_event_loop, target_event_loop)
+      if target_event_loop != :extern && target_event_loop.event_scope?
+        ExternalProc.new(arg, source_event_loop, name) do |*args, &block|
+          if target_event_loop != :extern && target_event_loop.event_scope?
+            # called in the event scope
+            if block && !(WrappedProc === block)
+              raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+            end
+            cbblock = args.last if Proc === args.last
+            target_event_loop._external_proc_call(arg, name, args, block, cbblock, source_event_loop)
+          else
+            # called externally
+            raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"
+          end
+        end
+      else
+        WrappedObject.new(arg, source_event_loop, name)
+      end
+    end
   end
 
-  # Base wrapper class for objects created in event scope or external.
+  # Generic wrapper for objects created in external scope or in the event scope of another Eventbox instance.
+  #
+  # Access to the object from a different scope is denied, but the wrapper object can be stored and passed back to the origin scope to unwrap it.
   class WrappedObject
     attr_reader :name
     def initialize(object, event_loop, name=nil)
@@ -218,26 +250,12 @@ class Eventbox
       @dont_marshal = ExternalSharedObject # protect self from being marshaled
     end
 
-    def inspect
-      "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect}>"
-    end
-  end
-
-  # Generic wrapper for objects created in the event scope of some Eventbox instance.
-  #
-  # Access to the object from external or action scope is denied, but the wrapper object can be stored and passed back to event scope to unwrap it.
-  class InternalObject < WrappedObject
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
     end
-  end
 
-  # Generic wrapper for objects created external of some Eventbox instance.
-  #
-  # Access to the external object from the event scope is denied, but the wrapper object can be stored and passed back to external or action scope to unwrap it.
-  class ExternalObject < WrappedObject
-    def object_for(target_event_loop)
-      target_event_loop == :extern ? @object : self
+    def inspect
+      "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect}>"
     end
   end
 
@@ -313,7 +331,7 @@ class Eventbox
     end
 
     def object_for(target_event_loop)
-      target_event_loop == :extern ? @object : self
+      @event_loop == target_event_loop ? @object : self
     end
   end
 

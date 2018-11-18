@@ -233,10 +233,13 @@ class Eventbox
   # Mark an object as to be shared instead of copied.
   #
   # A marked object is never passed as copy, but passed as reference.
-  # The object is therefore wrapped as {InternalObject} or {ExternalObject} when used in an unsafe scope.
-  # Wrapping as {InternalObject} or {ExternalObject} denies access from external scope to event scope objects and vice versa.
+  # The object is therefore wrapped as {WrappedObject} when used in an unsafe scope.
+  # Wrapping as {WrappedObject} denies access from external scope to event scope objects and vice versa.
+  # It also denies access to objects originated from a foreign event scope.
   # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
   # It can therefore be used to modify the original object even after traversing the boundary.
+  #
+  # Wrapping and unwrapping works even if the shared object is stored within another object as instance variable or within a collection class.
   #
   # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
   public def shared_object(object)

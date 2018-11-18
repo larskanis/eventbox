@@ -82,7 +82,7 @@ class EventboxCallTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal Eventbox::ExternalObject, eb.values[2]
+    assert_equal Eventbox::WrappedObject, eb.values[2]
     assert_equal eb.thread, eb.values[3]
   end
 
@@ -121,7 +121,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new(123, IO.pipe.first)
 
-    assert_equal Eventbox::ExternalObject, eb.values[1], "result is passed to superclass"
+    assert_equal Eventbox::WrappedObject, eb.values[1], "result is passed to superclass"
     assert_equal eb.thread, eb.values[3], "superclass was called"
     assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
@@ -229,7 +229,7 @@ class EventboxCallTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal Eventbox::ExternalObject, eb.values[2]
+    assert_equal Eventbox::WrappedObject, eb.values[2]
     assert_equal eb.thread, eb.values[3]
   end
 
@@ -283,7 +283,7 @@ class EventboxCallTest < Minitest::Test
     assert_equal "abc", fc.shared_object(str)
     value = fc.out(str)
 
-    assert_equal [str, "Eventbox::ExternalObject"], value
+    assert_equal [str, "Eventbox::WrappedObject"], value
   end
 
   def test_internal_object_sync_call
@@ -294,7 +294,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     assert_equal 1234, fc.out[0]
-    assert_kind_of Eventbox::InternalObject, fc.out[1]
+    assert_kind_of Eventbox::WrappedObject, fc.out[1]
     assert_kind_of Eventbox::AsyncProc, fc.out[2]
     assert_kind_of Eventbox::SyncProc, fc.out[3]
     assert_kind_of Eventbox::YieldProc, fc.out[4]
@@ -307,7 +307,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new
 
-    assert_kind_of Eventbox::InternalObject, fc.out
+    assert_kind_of Eventbox::WrappedObject, fc.out
   end
 
   def test_external_proc_called_internally_should_return_nil
@@ -386,16 +386,16 @@ class EventboxCallTest < Minitest::Test
 
     pr = proc do |n, ext_obj, ext_obj_klass, int_obj|
       assert_kind_of IO, ext_obj
-      assert_equal Eventbox::ExternalObject, ext_obj_klass
-      assert_kind_of Eventbox::InternalObject, int_obj
+      assert_equal Eventbox::WrappedObject, ext_obj_klass
+      assert_kind_of Eventbox::WrappedObject, int_obj
       [n + 1, IO.pipe[0]]
     end
 
     n, ext_obj, ext_obj_klass, int_obj = fc.go(pr, IO.pipe[0])
     assert_equal 6, n
     assert_kind_of IO, ext_obj
-    assert_equal Eventbox::ExternalObject, ext_obj_klass
-    assert_kind_of Eventbox::InternalObject, int_obj
+    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_kind_of Eventbox::WrappedObject, int_obj
   end
 
   def test_external_object_invalid_access
@@ -483,8 +483,8 @@ class EventboxCallTest < Minitest::Test
     n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
     assert_equal 124, n
     assert_kind_of IO, ext_obj
-    assert_equal Eventbox::ExternalObject, ext_obj_klass
-    assert_kind_of Eventbox::InternalObject, int_obj
+    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_kind_of Eventbox::WrappedObject, int_obj
   end
 
   def test_async_proc_called_externally_denies_callback
@@ -583,8 +583,8 @@ class EventboxCallTest < Minitest::Test
     n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
     assert_equal 124, n
     assert_kind_of IO, ext_obj
-    assert_equal Eventbox::ExternalObject, ext_obj_klass
-    assert_kind_of Eventbox::InternalObject, int_obj
+    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_kind_of Eventbox::WrappedObject, int_obj
   end
 
   def test_yield_proc_called_called_two_times
@@ -841,7 +841,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     err = assert_raises(MyError) { eb.go }
-    assert_kind_of Eventbox::InternalObject, err.value
+    assert_kind_of Eventbox::WrappedObject, err.value
     assert_equal 123, eb.num
   end
 
@@ -873,7 +873,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = eb.go
     err = assert_raises(MyError) { pr.call }
-    assert_kind_of Eventbox::InternalObject, err.value
+    assert_kind_of Eventbox::WrappedObject, err.value
     assert_equal 123, eb.num
   end
 
@@ -904,5 +904,38 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     assert_raises(Eventbox::MultipleResults) { eb.go }
+  end
+
+  def test_inter_eventbox_sync_call_args
+    eb1 = Class.new(Eventbox) do
+      yield_call def go(eb, ext_obj, result, &ext_proc)
+        eb.new(sync_proc{}, "abc", 123, IO.pipe[0], result, ext_obj, ext_proc, result) {}
+      end
+    end
+    eb2 = Class.new(Eventbox) do
+      sync_call def init(*objs, result, &block)
+        result.yield(*objs.map(&:class), block.class)
+      end
+    end
+
+    objs = eb1.new.go(eb2, IO.pipe[0]) {}
+    assert_equal [Eventbox::SyncProc, String, Integer, Eventbox::WrappedObject, Eventbox::CompletionProc, Eventbox::WrappedObject, Eventbox::ExternalProc, Eventbox::ExternalProc], objs
+  end
+
+  def test_inter_eventbox_sync_call_return
+    eb1 = Class.new(Eventbox) do
+      yield_call def go1(eb, ext_obj, result, &ext_proc)
+        rets = eb.new.go2(ext_obj, ext_proc, IO.pipe[0]) {}
+        result.yield rets.map(&:class)
+      end
+    end
+    eb2 = Class.new(Eventbox) do
+      sync_call def go2(ext_obj, ext_proc, go1_obj, &block)
+        return sync_proc{}, "abc", 123, IO.pipe[0], ext_obj, ext_proc, go1_obj, block
+      end
+    end
+
+    objs = eb1.new.go1(eb2, IO.pipe[0]) {}
+    assert_equal [Eventbox::SyncProc, String, Integer, Eventbox::WrappedObject, Eventbox::WrappedObject, Eventbox::ExternalProc, IO, Proc], objs
   end
 end

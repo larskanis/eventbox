@@ -123,8 +123,8 @@ def test_action_with_internal_object_call
   values = fc.go
   assert_equal "111", values[0]
   assert_equal "String", values[1]
-  assert_kind_of Eventbox::InternalObject, values[2]
-  assert_equal "Eventbox::InternalObject", values[3]
+  assert_kind_of Eventbox::WrappedObject, values[2]
+  assert_equal "Eventbox::WrappedObject", values[3]
 end
 
 def test_action_external_object_tagged
@@ -340,7 +340,7 @@ def test_action_raise
   assert_equal :sleepy, eb.a.name
   err, err_klass = eb.stop
   assert_kind_of TestActionRaise::Stop, err
-  assert_equal Eventbox::InternalObject, err_klass
+  assert_equal Eventbox::WrappedObject, err_klass
 end
 
 def test_action_abort_in_init

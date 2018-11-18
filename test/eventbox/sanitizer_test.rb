@@ -25,7 +25,7 @@ class EventboxSanitizerTest < Minitest::Test
     kl0, res = eb.go("string")
     assert_equal String, kl0
     assert_kind_of Array, res
-    assert_kind_of Eventbox::InternalObject, res[0]
+    assert_kind_of Eventbox::WrappedObject, res[0]
 
     kl1, kl2, kl3 = eb.back(res)
     assert_equal Array, kl1
@@ -43,7 +43,7 @@ class EventboxSanitizerTest < Minitest::Test
     obj = [eb.shared_object(["string"])]
     res, kl1, kl2 = eb.go(obj)
     assert_equal Array, kl1
-    assert_equal Eventbox::ExternalObject, kl2
+    assert_equal Eventbox::WrappedObject, kl2
     assert_same obj[0], res[0]
     assert_kind_of Array, res
     assert_kind_of Array, res[0]
@@ -70,7 +70,7 @@ class EventboxSanitizerTest < Minitest::Test
     ios = fc.pr
     assert_kind_of Array, ios
     io = ios.first
-    assert_kind_of Eventbox::InternalObject, io
+    assert_kind_of Eventbox::WrappedObject, io
     ex = assert_raises(NoMethodError){ ios.first.close }
     assert_match(/`close'/, ex.to_s)
   end
@@ -98,7 +98,7 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal TestObject, okl
     assert_equal String, akl
     assert_equal Eventbox::ExternalProc, bkl
-    assert_equal Eventbox::ExternalObject, ckl
+    assert_equal Eventbox::WrappedObject, ckl
 
     assert_equal TestObject, obj.class
     assert_equal String, obj.a.class
@@ -123,7 +123,7 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal TestStruct, okl
     assert_equal String, akl
     assert_equal Eventbox::ExternalProc, bkl
-    assert_equal Eventbox::ExternalObject, ckl
+    assert_equal Eventbox::WrappedObject, ckl
     assert_equal String, xkl
 
     assert_equal TestStruct, obj.class
@@ -150,7 +150,7 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal TestArray, okl
     assert_equal String, akl
     assert_equal Eventbox::ExternalProc, bkl
-    assert_equal Eventbox::ExternalObject, ckl
+    assert_equal Eventbox::WrappedObject, ckl
     assert_equal String, xkl
 
     assert_equal TestArray, obj.class
@@ -177,7 +177,7 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal TestHash, okl
     assert_equal String, akl
     assert_equal Eventbox::ExternalProc, bkl
-    assert_equal Eventbox::ExternalObject, ckl
+    assert_equal Eventbox::WrappedObject, ckl
     assert_equal String, xkl
 
     assert_equal TestHash, obj.class

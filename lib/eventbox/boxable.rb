@@ -52,8 +52,6 @@ class Eventbox
           # Otherwise super() would start an infinite recursion.
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = Sanitizer.sanitize_value(cb, @__event_loop__, @__event_loop__, name)
           @__event_loop__.async_call(eventbox, name, args, cb)
         end
         self
@@ -81,11 +79,7 @@ class Eventbox
         if @__event_loop__.event_scope?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = Sanitizer.sanitize_value(cb, @__event_loop__, @__event_loop__, name)
-          answer_queue = Queue.new
-          @__event_loop__.sync_call(eventbox, name, args, answer_queue, cb)
-          @__event_loop__.callback_loop(answer_queue)
+          @__event_loop__.sync_call(eventbox, name, args, cb)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
@@ -120,11 +114,7 @@ class Eventbox
           unbound_method.bind(eventbox).call(*args, &cb)
           self
         else
-          args = Sanitizer.sanitize_values(args, @__event_loop__, @__event_loop__, name)
-          cb = Sanitizer.sanitize_value(cb, @__event_loop__, @__event_loop__, name)
-          answer_queue = Queue.new
-          @__event_loop__.yield_call(eventbox, name, args, answer_queue, cb)
-          @__event_loop__.callback_loop(answer_queue)
+          @__event_loop__.yield_call(eventbox, name, args, cb)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
