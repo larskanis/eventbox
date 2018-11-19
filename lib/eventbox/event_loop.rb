@@ -117,7 +117,7 @@ class Eventbox
     end
 
     def async_call(box, name, args, block)
-      sel = with_call_frame(name, nil) do |source_event_loop|
+      with_call_frame(name, nil) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
         box.send("__#{name}__", *args, &block)
@@ -153,7 +153,7 @@ class Eventbox
 
     # Anonymous version of sync_call
     def sync_proc_call(pr, args, arg_block, answer_queue)
-      sel = with_call_frame(SyncProc, answer_queue) do |source_event_loop|
+      with_call_frame(SyncProc, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
         res = pr.yield(*args, &arg_block)
@@ -164,7 +164,7 @@ class Eventbox
 
     # Anonymous version of yield_call
     def yield_proc_call(pr, args, arg_block, answer_queue)
-      sel = with_call_frame(YieldProc, answer_queue) do |source_event_loop|
+      with_call_frame(YieldProc, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
         pr.yield(*args, _completion_proc(answer_queue, pr, source_event_loop), &arg_block)
