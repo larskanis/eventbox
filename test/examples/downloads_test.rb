@@ -47,7 +47,7 @@ class ExamplesDownloadsTest < Minitest::Test
     dls = d.downloads.sort_by{|k,v| k }
     assert_equal urls.sort, dls.map(&:first)
     assert_kind_of Exception, dls[0][1]
-    assert_kind_of String, dls[1][1]
-    assert_kind_of String, dls[2][1]
+    assert_equal String, dls[1][1].class
+    assert_equal String, dls[2][1].class
   end
 end

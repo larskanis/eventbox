@@ -24,8 +24,8 @@ class EventboxSanitizerTest < Minitest::Test
 
     kl0, res = eb.go("string")
     assert_equal String, kl0
-    assert_kind_of Array, res
-    assert_kind_of Eventbox::WrappedObject, res[0]
+    assert_equal Array, res.class
+    assert_equal Eventbox::WrappedObject, res[0].class
 
     kl1, kl2, kl3 = eb.back(res)
     assert_equal Array, kl1
@@ -45,8 +45,8 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal Array, kl1
     assert_equal Eventbox::WrappedObject, kl2
     assert_same obj[0], res[0]
-    assert_kind_of Array, res
-    assert_kind_of Array, res[0]
+    assert_equal Array, res.class
+    assert_equal Array, res[0].class
     assert_equal "string", res[0][0]
   end
 
@@ -68,9 +68,9 @@ class EventboxSanitizerTest < Minitest::Test
     end.new
 
     ios = fc.pr
-    assert_kind_of Array, ios
+    assert_equal Array, ios.class
     io = ios.first
-    assert_kind_of Eventbox::WrappedObject, io
+    assert_equal Eventbox::WrappedObject, io.class
     ex = assert_raises(NoMethodError){ ios.first.close }
     assert_match(/`close'/, ex.to_s)
   end
