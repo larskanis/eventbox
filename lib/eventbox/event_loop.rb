@@ -268,7 +268,7 @@ class Eventbox
           cbres = rets.block.yield(*rets.args, &rets.arg_block)
 
           if rets.cbresult
-            cbres = Sanitizer.sanitize_value(cbres, self, source_event_loop)
+            cbres = Sanitizer.sanitize_value(cbres, source_event_loop, self)
             external_proc_result(rets.cbresult, cbres)
           end
         when WrappedException

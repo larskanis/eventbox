@@ -378,8 +378,8 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_completion_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, ext_obj, result)
-        pr.call(5, ext_obj, ext_obj.class, IO.pipe[0], proc do |res|
-          result.yield res, ext_obj, ext_obj.class, IO.pipe[0]
+        pr.call(5, ext_obj, ext_obj.class, IO.pipe[0], proc do |n, ext_obj2|
+          result.yield n, ext_obj2, ext_obj2.class, ext_obj, ext_obj.class, IO.pipe[0]
         end)
       end
     end.new
@@ -391,8 +391,10 @@ class EventboxCallTest < Minitest::Test
       [n + 1, IO.pipe[0]]
     end
 
-    n, ext_obj, ext_obj_klass, int_obj = fc.go(pr, IO.pipe[0])
+    n, ext_obj2, ext_obj2_klass, ext_obj, ext_obj_klass, int_obj = fc.go(pr, IO.pipe[0])
     assert_equal 6, n
+    assert_equal IO, ext_obj2.class
+    assert_equal Eventbox::WrappedObject, ext_obj2_klass
     assert_kind_of IO, ext_obj
     assert_equal Eventbox::WrappedObject, ext_obj_klass
     assert_kind_of Eventbox::WrappedObject, int_obj
