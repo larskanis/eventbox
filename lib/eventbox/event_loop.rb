@@ -124,26 +124,22 @@ class Eventbox
       end
     end
 
-    def sync_call(box, name, args, block)
-      answer_queue = Queue.new
-      sel = with_call_frame(name, answer_queue) do |source_event_loop|
+    def sync_call(box, name, args, block, answer_queue)
+      with_call_frame(name, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
         res = box.send("__#{name}__", *args, &block)
         res = Sanitizer.sanitize_value(res, self, source_event_loop)
         answer_queue << res
       end
-      callback_loop(answer_queue, sel)
     end
 
-    def yield_call(box, name, args, block)
-      answer_queue = Queue.new
-      sel = with_call_frame(name, answer_queue) do |source_event_loop|
+    def yield_call(box, name, args, block, answer_queue)
+      with_call_frame(name, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
         box.send("__#{name}__", *args, _completion_proc(answer_queue, name, source_event_loop), &block)
       end
-      callback_loop(answer_queue, sel)
     end
 
     # Anonymous version of async_call
@@ -156,8 +152,7 @@ class Eventbox
     end
 
     # Anonymous version of sync_call
-    def sync_proc_call(pr, args, arg_block)
-      answer_queue = Queue.new
+    def sync_proc_call(pr, args, arg_block, answer_queue)
       sel = with_call_frame(SyncProc, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
@@ -165,18 +160,15 @@ class Eventbox
         res = Sanitizer.sanitize_value(res, self, source_event_loop)
         answer_queue << res
       end
-      callback_loop(answer_queue, sel)
     end
 
     # Anonymous version of yield_call
-    def yield_proc_call(pr, args, arg_block)
-      answer_queue = Queue.new
+    def yield_proc_call(pr, args, arg_block, answer_queue)
       sel = with_call_frame(YieldProc, answer_queue) do |source_event_loop|
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
         pr.yield(*args, _completion_proc(answer_queue, pr, source_event_loop), &arg_block)
       end
-      callback_loop(answer_queue, sel)
     end
 
     # Called when an external proc finished
@@ -206,7 +198,9 @@ class Eventbox
           block.yield(*args, &arg_block)
         else
           # called externally
-          sync_proc_call(block, args, arg_block)
+          answer_queue = Queue.new
+          sel = sync_proc_call(block, args, arg_block, answer_queue)
+          callback_loop(answer_queue, sel)
         end
       end
     end
@@ -220,7 +214,9 @@ class Eventbox
           nil
         else
           # called externally
-          yield_proc_call(block, args, arg_block)
+          answer_queue = Queue.new
+          sel = yield_proc_call(block, args, arg_block, answer_queue)
+          callback_loop(answer_queue, sel)
         end
       end
     end

@@ -79,7 +79,9 @@ class Eventbox
         if @__event_loop__.event_scope?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          @__event_loop__.sync_call(eventbox, name, args, cb)
+          answer_queue = Queue.new
+          sel = @__event_loop__.sync_call(eventbox, name, args, cb, answer_queue)
+          @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
@@ -114,7 +116,9 @@ class Eventbox
           unbound_method.bind(eventbox).call(*args, &cb)
           self
         else
-          @__event_loop__.yield_call(eventbox, name, args, cb)
+          answer_queue = Queue.new
+          sel = @__event_loop__.yield_call(eventbox, name, args, cb, answer_queue)
+          @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
