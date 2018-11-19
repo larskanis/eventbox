@@ -26,7 +26,3 @@ environment:
       RUBYDOWNLOAD: x86
     - ruby_version: "24-x64"
     - ruby_version: "24"
-
-matrix:
-  allow_failures:
-    - ruby_version: "head"
