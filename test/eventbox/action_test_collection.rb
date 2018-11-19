@@ -576,3 +576,23 @@ def test_action_call_is_private
   err = assert_raises(NoMethodError) { eb.a }
   assert_match(/private method `a' called/, err.to_s)
 end
+
+def test_sync_proc_in_action
+  eb = Class.new(Eventbox) do
+    yield_call def go(sym, result)
+      ac(sym, result)
+    end
+    public action def ac(sym, result)
+      send(sym) {}
+    rescue => err
+      result.raise err
+    end
+  end.new
+
+  err = assert_raises(Eventbox::InvalidAccess) { eb.go(:async_proc) }
+  assert_match(/async_proc outside of the event scope is not allowed/, err.to_s)
+  err = assert_raises(Eventbox::InvalidAccess) { eb.go(:sync_proc) }
+  assert_match(/sync_proc outside of the event scope is not allowed/, err.to_s)
+  err = assert_raises(Eventbox::InvalidAccess) { eb.go(:yield_proc) }
+  assert_match(/yield_proc outside of the event scope is not allowed/, err.to_s)
+end

@@ -179,6 +179,7 @@ class Eventbox
     end
 
     def new_async_proc(name=nil, klass=AsyncProc, &block)
+      raise InvalidAccess, "async_proc outside of the event scope is not allowed" unless event_scope?
       pr = klass.new do |*args, &arg_block|
         if event_scope?
           # called in the event scope
@@ -192,6 +193,7 @@ class Eventbox
     end
 
     def new_sync_proc(name=nil, &block)
+      raise InvalidAccess, "sync_proc outside of the event scope is not allowed" unless event_scope?
       SyncProc.new do |*args, &arg_block|
         if event_scope?
           # called in the event scope
@@ -206,6 +208,7 @@ class Eventbox
     end
 
     def new_yield_proc(name=nil, &block)
+      raise InvalidAccess, "yield_proc outside of the event scope is not allowed" unless event_scope?
       YieldProc.new do |*args, &arg_block|
         if event_scope?
           # called in the event scope
