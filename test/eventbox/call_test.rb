@@ -909,7 +909,7 @@ class EventboxCallTest < Minitest::Test
   def test_inter_eventbox_sync_call_args
     eb1 = Class.new(Eventbox) do
       yield_call def go(eb, ext_obj, result, &ext_proc)
-        eb.new(sync_proc{}, "abc", 123, IO.pipe[0], result, ext_obj, ext_proc, result) {}
+        eb.new(sync_proc{}, "abc", :xyz, IO.pipe[0], result, ext_obj, ext_proc, result) {}
       end
     end
     eb2 = Class.new(Eventbox) do
@@ -919,7 +919,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     objs = eb1.new.go(eb2, IO.pipe[0]) {}
-    assert_equal [Eventbox::SyncProc, String, Integer, Eventbox::WrappedObject, Eventbox::CompletionProc, Eventbox::WrappedObject, Eventbox::ExternalProc, Eventbox::ExternalProc], objs
+    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::WrappedObject, Eventbox::CompletionProc, Eventbox::WrappedObject, Eventbox::ExternalProc, Eventbox::ExternalProc], objs
   end
 
   def test_inter_eventbox_sync_call_return
@@ -931,11 +931,11 @@ class EventboxCallTest < Minitest::Test
     end
     eb2 = Class.new(Eventbox) do
       sync_call def go2(ext_obj, ext_proc, go1_obj, &block)
-        return sync_proc{}, "abc", 123, IO.pipe[0], ext_obj, ext_proc, go1_obj, block
+        return sync_proc{}, "abc", :xyz, IO.pipe[0], ext_obj, ext_proc, go1_obj, block
       end
     end
 
     objs = eb1.new.go1(eb2, IO.pipe[0]) {}
-    assert_equal [Eventbox::SyncProc, String, Integer, Eventbox::WrappedObject, Eventbox::WrappedObject, Eventbox::ExternalProc, IO, Proc], objs
+    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::WrappedObject, Eventbox::WrappedObject, Eventbox::ExternalProc, IO, Proc], objs
   end
 end
