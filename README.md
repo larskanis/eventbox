@@ -17,7 +17,7 @@ An important task of Eventbox is to avoid race conditions through shared data.
 Such data races between event scope and external/action scope are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
-Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+Eventbox is kind of [advancement](https://www.rubydoc.info/github/larskanis/eventbox/master#The_Actor_model) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
 
 For better readability switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
@@ -365,12 +365,13 @@ This was the primary motivation to develop this library.
 
 Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
 While the actor model uses explicit message passing, Eventbox relies on method, closure calls and exceptions, which makes it much more natural to use.
-Unlike an actor, Eventbox doesn't start a thread per object by default, but uses the thread of the caller to execute non-blocking code.
-Instead it can create and manage in-object private threads in form of actions to be used for blocking operations.
+Unlike an actor, Eventbox doesn't start a thread per object, but uses the thread of the caller to execute non-blocking code.
+This makes instantiation of Eventbox objects cheeper than Actor objects.
+Instead it can create and manage in-object private threads in form of {Eventbox.action actions} to be used for blocking operations.
 
 Many actor implementations manage an inheritance tree of actor objects.
 Parent actors are then notified about failures of child actors.
-In contrast Eventbox objects maintain a list of all running internal actions instead, but objects are completely independent from each other.
+In contrast Eventbox objects maintain a list of all running internal actions instead, but are completely independent from each other.
 Failures are handled object internal - see chapter "Exceptions" above.
 
 ### Internal state
@@ -406,7 +407,7 @@ This is in contrast to libraries like [async](https://github.com/socketry/async)
 
 ## Eventbox performance
 
-Eventbox is reasonably fast, but far from the performance of threading primitives implemented in [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
+Eventbox is reasonably fast, but far from the performance of low level threading primitives (like implemented in [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby) ).
 It is not written to minimize resource consumption or maximize performance or throughput.
 Instead it is written to minimize race conditions and implementation complexity in a multithreaded environment.
 It also does a lot of safety checks to support the developer.
