@@ -46,17 +46,19 @@ class Eventbox
     # The method always returns +self+ to the caller.
     def async_call(name, &block)
       unbound_method = nil
+      wrapper = nil
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.event_scope?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
           unbound_method.bind(eventbox).call(*args, &cb)
         else
-          @__event_loop__.async_call(eventbox, name, args, cb)
+          @__event_loop__.async_call(eventbox, name, args, cb, wrapper)
         end
         self
       end
       unbound_method = self.instance_method("__#{name}__")
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       name
     end
 
@@ -75,16 +77,18 @@ class Eventbox
     # Instead use {action} in these cases.
     def sync_call(name, &block)
       unbound_method = nil
+      wrapper = nil
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.event_scope?
           unbound_method.bind(eventbox).call(*args, &cb)
         else
           answer_queue = Queue.new
-          sel = @__event_loop__.sync_call(eventbox, name, args, cb, answer_queue)
+          sel = @__event_loop__.sync_call(eventbox, name, args, cb, answer_queue, wrapper)
           @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       name
     end
 
@@ -110,18 +114,21 @@ class Eventbox
     # Instead use {action} in these cases.
     def yield_call(name, &block)
       unbound_method = nil
-      with_block_or_def(name, block) do |*args, &cb|
+      wrapper = nil
+      with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
           @__event_loop__.safe_yield_result(args, name)
+          args << kwargs unless kwargs.empty?
           unbound_method.bind(eventbox).call(*args, &cb)
           self
         else
           answer_queue = Queue.new
-          sel = @__event_loop__.yield_call(eventbox, name, args, cb, answer_queue)
+          sel = @__event_loop__.yield_call(eventbox, name, args, kwargs, cb, answer_queue, wrapper)
           @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
       unbound_method = self.instance_method("__#{name}__")
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       name
     end
 

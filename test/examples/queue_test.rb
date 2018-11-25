@@ -7,8 +7,8 @@ class ExamplesQueueTest < Minitest::Test
       @waiting = []
     end
 
-    async_call def enq(value)
-      @que << value
+    async_call def enq(€value)
+      @que << €value
       if w=@waiting.shift
         w.yield @que.shift
       end

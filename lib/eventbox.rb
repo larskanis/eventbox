@@ -1,4 +1,5 @@
 require "weakref"
+require "eventbox/argument_wrapper"
 require "eventbox/sanitizer"
 require "eventbox/boxable"
 require "eventbox/event_loop"
