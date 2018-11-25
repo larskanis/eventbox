@@ -15,11 +15,12 @@ END {
   if lingering.any?
     warn "Warning: #{lingering.length} lingering threads"
     lingering.each do |th|
-      line = th.backtrace&.find{|t| t=~/test\// } or
-          th.backtrace&.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) } or
+      line = th.backtrace&.find{|t| t=~/test\// } ||
+          th.backtrace&.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) } ||
           th.backtrace&.first
       warn "    #{ line }"
     end
+    # puts lingering.last.backtrace
   end
 }
 
