@@ -238,7 +238,7 @@ class Eventbox
     end
   end
 
-  # Generic wrapper for objects created in external scope or in the event scope of another Eventbox instance.
+  # Generic wrapper for objects that are passed through a foreign scope as reference.
   #
   # Access to the object from a different scope is denied, but the wrapper object can be stored and passed back to the origin scope to unwrap it.
   class WrappedObject

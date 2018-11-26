@@ -235,10 +235,10 @@ class Eventbox
   #
   # A marked object is never passed as copy, but passed as reference.
   # The object is therefore wrapped as {WrappedObject} when used in an unsafe scope.
-  # Wrapping as {WrappedObject} denies access from external scope to event scope objects and vice versa.
+  # Wrapping as {WrappedObject} denies access from external/action scope to event scope objects and vice versa.
   # It also denies access to objects originated from a foreign event scope.
   # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
-  # It can therefore be used to modify the original object even after traversing the boundary.
+  # It can therefore be used to modify the original object even after traversing the boundaries.
   #
   # Wrapping and unwrapping works even if the shared object is stored within another object as instance variable or within a collection class.
   #
