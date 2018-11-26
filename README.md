@@ -11,13 +11,14 @@ Code inside an {Eventbox} object is executed non-concurrently and hence shouldn'
 This is similar to the typical JavaScript programming style.
 
 On the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Communication between actions and event processing is done through ordinary method calls.
+Communication between actions and event processing is done through ordinary method or lambda calls.
 
 An important task of Eventbox is to avoid race conditions through shared data.
 Such data races between event scope and external/action scope are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
-Eventbox is kind of [advancement](https://www.rubydoc.info/github/larskanis/eventbox/master#The_Actor_model) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+Eventbox is an approach to build thread-safe objects with arbitrary interfaces and internal algorithms.
+It is kind of [advancement](https://www.rubydoc.info/github/larskanis/eventbox/master#The_Actor_model) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
 
 For better readability switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
@@ -55,24 +56,24 @@ require "eventbox"
 class Queue < Eventbox
   # Called at Queue.new just like Object#initialize in ordinary ruby classes
   async_call def init
-    @que = []      # List of values waiting for being fetched by deq
-    @waiting = []  # List of blocking deq calls waiting for new values to be pushed by enq
+    @que = []       # List of values waiting for being fetched by deq
+    @waiting = []   # List of blocking deq calls waiting for new values to be pushed by enq
   end
 
   # Push a value to the queue and return the next value by the next waiting deq call
-  async_call def enq(value)
-    @que << value         # Push a value to the queue
+  async_call def enq(€value)  # €-variables are passed through as reference
+    @que << €value            # Push a value to the queue
     if w=@waiting.shift
-      w.yield @que.shift  # Let one waiting deq call return with the next value from the queue
+      w.yield @que.shift      # Let one waiting deq call return with the next value from the queue
     end
   end
 
   # Fetch a value from the queue or suspend the caller until a value has been enqueued
   yield_call def deq(result)
     if @que.empty?
-      @waiting << result       # Don't return a value now, but enqueue the request as waiting
+      @waiting << result      # Don't return a value now, but enqueue the request as waiting
     else
-      result.yield @que.shift  # Immediately return the next value from the queue
+      result.yield @que.shift # Immediately return the next value from the queue
     end
   end
 end
@@ -213,6 +214,10 @@ There is no hard criteria for what is considered a blocking operation, but since
 If the processing time of an event scope method or block exceeds the limit of 0.5 seconds, a warning is print to STDERR.
 This limit can be changed by {Eventbox.with_options}.
 
+Arguments of async, sync and yield calls can be prefixed by a € sign.
+This marks them as to be passed through as reference, instead of being copied.
+A €-variable is wrapped and protected within the event scope, but unwrapped when passed to action or external scope.
+
 In additoin there are accessor methods usable as known from ordinary ruby objects: {Eventbox.attr_reader attr_reader},  {Eventbox.attr_writer attr_writer} and  {Eventbox.attr_accessor attr_accessor}.
 They allow thread-safe access to instance variables.
 
@@ -253,6 +258,9 @@ Similary to the 3 method calls above there are 3 types of proc objects which act
 * {Eventbox#async_proc async_proc} is a convenience version of yield_proc for a non-blocking code block without return value.
 
 These proc objects can be created within event scope, can be passed to external scope and called from there.
+
+Arguments of async, sync and yield procs can be prefixed by a € sign.
+In that case, they are passed as reference, equally to €-variables of {Eventbox.async_call async_call}, {Eventbox.sync_call sync_call} and {Eventbox.yield_call yield_call} methods.
 
 The other way around - Proc objects or blocks which are defined in external or action scope - can be passed to event scope.
 Such a Proc object is wrapped as a {Eventbox::ExternalProc} object within the event scope.
@@ -364,7 +372,7 @@ This was the primary motivation to develop this library.
 ### The Actor model
 
 Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
-While the actor model uses explicit message passing, Eventbox relies on method, closure calls and exceptions, which makes it much more natural to use.
+While the actor model uses explicit message passing, Eventbox relies on method calls, closure calls and exceptions, which makes it much more natural to use.
 Unlike an actor, Eventbox doesn't start a thread per object, but uses the thread of the caller to execute non-blocking code.
 This makes instantiation of Eventbox objects cheeper than Actor objects.
 Instead it can create and manage in-object private threads in form of {Eventbox.action actions} to be used for blocking operations.
