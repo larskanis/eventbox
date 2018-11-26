@@ -2,7 +2,7 @@ build: off
 
 init:
   - set PATH=C:/Ruby%ruby_version%/bin;%PATH%
-  - set RUBYOPT=--verbose
+  - set RUBYOPT=--verbose -Eutf-8
 
 install:
   - ps: |
