@@ -1,3 +1,5 @@
+# frozen-string-literal: true
+
 class Eventbox
   class ObjectRegistry
     class << self

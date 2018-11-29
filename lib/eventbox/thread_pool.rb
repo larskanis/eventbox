@@ -1,3 +1,5 @@
+# frozen-string-literal: true
+
 class Eventbox
   # A pool of reusable threads for actions
   #

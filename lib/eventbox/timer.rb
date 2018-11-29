@@ -1,3 +1,5 @@
+# frozen-string-literal: true
+
 class Eventbox
   # Simple timer services for Eventboxes
   #

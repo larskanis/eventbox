@@ -1,3 +1,5 @@
+# frozen-string-literal: true
+
 require "weakref"
 require "eventbox/argument_wrapper"
 require "eventbox/sanitizer"

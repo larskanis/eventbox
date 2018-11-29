@@ -1,3 +1,5 @@
+# frozen-string-literal: true
+
 class Eventbox
 
   # Extend modules with Eventbox method creation functions
