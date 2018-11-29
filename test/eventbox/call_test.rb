@@ -321,7 +321,7 @@ class EventboxCallTest < Minitest::Test
   def test_internal_object_sync_call_tagged
     fc = Class.new(Eventbox) do
       sync_call def out
-        shared_object("abc")
+        shared_object("abc".dup)
       end
     end.new
 

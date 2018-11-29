@@ -2,7 +2,7 @@ build: off
 
 init:
   - set PATH=C:/Ruby%ruby_version%/bin;%PATH%
-  - set RUBYOPT=--verbose -Eutf-8
+  - set RUBYOPT=--verbose -Eutf-8 --enable-frozen-string-literal
 
 install:
   - ps: |
