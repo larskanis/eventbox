@@ -2,13 +2,15 @@
 sudo: false
 language: ruby
 cache: bundler
-rvm:
-  - 2.3.8
-  - 2.5.3
-  - jruby-9.2.4.1
-  - ruby-head
 matrix:
   fast_finish: true
+  include:
+    - rvm: 2.3.8
+    - rvm: 2.5.3
+      env: RUBYOPT=--verbose --enable-frozen-string-literal
+    - rvm: jruby-9.2.4.1
+    - rvm: ruby-head
+      env: RUBYOPT=--verbose --enable-frozen-string-literal
+
 script:
-  - export "RUBYOPT=--verbose --enable-frozen-string-literal"
   - bundle exec rake test TESTOPTS=-v
