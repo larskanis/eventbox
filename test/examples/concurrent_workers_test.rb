@@ -66,15 +66,15 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
       end
     end
 
-    yield_call :process do |name, result|
+    yield_call def process(name, result)
       @tasks << [result, name]
       check_work
     end
 
-    private(yield_call(:next_task) do |workerid, input|
+    private yield_call def next_task(workerid, input)
       @waiting[workerid] = input
       check_work
-    end)
+    end
   end
 
   def test_concurrent_workers2
@@ -97,19 +97,19 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
       @notify_when_finished = []
     end
 
-    async_call :process do |name, &block|
+    async_call def process(name, &block)
       @tasks << [block, name]
       check_work
     end
 
-    sync_call :task_finished do |workerid, result|
+    sync_call def task_finished(workerid, result)
       @working.delete(workerid).yield result
       if @tasks.empty? && @working.empty?
         @notify_when_finished.each(&:yield)
       end
     end
 
-    yield_call :finish_tasks do |result|
+    yield_call def finish_tasks(result)
       if @tasks.empty? && @working.empty?
         result.yield
       else

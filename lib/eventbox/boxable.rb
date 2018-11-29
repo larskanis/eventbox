@@ -24,16 +24,12 @@ class Eventbox
 
     # @private
     def with_block_or_def(name, block, &cexec)
-      if block
-        define_method(name, &cexec)
-        private define_method("__#{name}__", &block)
-      else
-        alias_method("__#{name}__", name)
-        private("__#{name}__")
-        remove_method(name)
-        define_method(name, &cexec)
-      end
+      alias_method("__#{name}__", name)
+      private("__#{name}__")
+      remove_method(name)
+      define_method(name, &cexec)
       private name if name == :init
+      name
     end
 
     # Define a threadsafe method for asynchronous (fire-and-forget) calls.
@@ -49,8 +45,8 @@ class Eventbox
     #
     # The method always returns +self+ to the caller.
     def async_call(name, &block)
-      unbound_method = nil
-      wrapper = nil
+      unbound_method = self.instance_method(name)
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.event_scope?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
@@ -61,9 +57,6 @@ class Eventbox
         end
         self
       end
-      unbound_method = self.instance_method("__#{name}__")
-      wrapper = ArgumentWrapper.build(unbound_method, name)
-      name
     end
 
     # Define a method for synchronous calls.
@@ -82,8 +75,8 @@ class Eventbox
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
     def sync_call(name, &block)
-      unbound_method = nil
-      wrapper = nil
+      unbound_method = self.instance_method(name)
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       with_block_or_def(name, block) do |*args, &cb|
         if @__event_loop__.event_scope?
           unbound_method.bind(eventbox).call(*args, &cb)
@@ -93,9 +86,6 @@ class Eventbox
           @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
-      unbound_method = self.instance_method("__#{name}__")
-      wrapper = ArgumentWrapper.build(unbound_method, name)
-      name
     end
 
     # Define a method for calls with deferred result.
@@ -121,8 +111,8 @@ class Eventbox
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
     def yield_call(name, &block)
-      unbound_method = nil
-      wrapper = nil
+      unbound_method = self.instance_method(name)
+      wrapper = ArgumentWrapper.build(unbound_method, name)
       with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
           @__event_loop__.safe_yield_result(args, name)
@@ -135,23 +125,20 @@ class Eventbox
           @__event_loop__.callback_loop(answer_queue, sel)
         end
       end
-      unbound_method = self.instance_method("__#{name}__")
-      wrapper = ArgumentWrapper.build(unbound_method, name)
-      name
     end
 
     # Threadsafe write access to instance variables.
     def attr_writer(name)
-      async_call("#{name}=") do |value|
+      async_call(define_method("#{name}=") do |value|
         instance_variable_set("@#{name}", value)
-      end
+      end)
     end
 
     # Threadsafe read access to instance variables.
     def attr_reader(name)
-      sync_call("#{name}") do
+      sync_call(define_method("#{name}") do
         instance_variable_get("@#{name}")
-      end
+      end)
     end
 
     # Threadsafe read and write access to instance variables.
@@ -209,7 +196,7 @@ class Eventbox
     #   end
     #
     def action(name, &block)
-      unbound_method = nil
+      unbound_method = self.instance_method(name)
       with_block_or_def(name, block) do |*args, &cb|
         raise InvalidAccess, "action must not be called with a block" if cb
 
@@ -225,7 +212,6 @@ class Eventbox
         @__event_loop__.start_action(meth, name, args)
       end
       private name
-      unbound_method = self.instance_method("__#{name}__")
       name
     end
   end

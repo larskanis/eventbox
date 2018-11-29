@@ -232,11 +232,11 @@ class EventboxCallTest < Minitest::Test
   end
 
   class TestInitWithBlock < Eventbox
-    async_call :init do |num, pr, pi|
+    async_call def init(num, pr, pi)
       @values = [num.class, pr.class, pi.class, Thread.current.object_id]
     end
     attr_reader :values
-    sync_call :thread do
+    sync_call def thread
       Thread.current.object_id
     end
   end
@@ -254,8 +254,8 @@ class EventboxCallTest < Minitest::Test
   def test_init_with_async_block_and_super
     pr = proc {}
     eb = Class.new(TestInitWithBlock) do
-      async_call :init do |num, pr2, pi2|
-        super(num, pr2, pi2) # block form requres explicit parameters
+      async_call def init(num, pr2, pi2)
+        super(num, pr2, pi2) # block form requires explicit parameters
         @values << Thread.current.object_id
       end
     end.new(123, pr, IO.pipe.first)
@@ -648,13 +648,13 @@ class EventboxCallTest < Minitest::Test
   end
 
   class Yielder2 < Eventbox
-    yield_call :zero do |res|
+    yield_call def zero(res)
       res.yield
     end
-    yield_call :one do |num, res|
+    yield_call def one(num, res)
       res.yield num+1
     end
-    yield_call :many do |num, pr, res|
+    yield_call def many(num, pr, res)
       res.yield num+1, pr
     end
   end

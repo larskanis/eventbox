@@ -5,7 +5,7 @@ class FcSleep < Eventbox
     sleeper(time, result)
   end
 
-  action :sleeper do |time, result|
+  action def sleeper(time, result)
     sleep(time)
     timeout(result)
   end
@@ -37,7 +37,7 @@ class FcModifyParams < Eventbox
     @str << "b"
   end
 
-  async_call :modify do |str, result|
+  async_call def modify(str, result)
     str << "d"
     result.yield str
   end
@@ -150,7 +150,7 @@ def test_action_external_object_tagged
 end
 
 class Yielder1 < Eventbox
-  yield_call :delayed do |pr, i, ths, bl|
+  yield_call def delayed(pr, i, ths, bl)
     @bl = bl
     ths << Thread.current.object_id
     finish(pr, i+1, ths)
@@ -161,7 +161,7 @@ class Yielder1 < Eventbox
     finished(pr, i+1, ths)
   end
 
-  async_call :finished do |pr, i, ths|
+  async_call def finished(pr, i, ths)
     ths << Thread.current.object_id
     @bl.yield [pr, i+1, ths]
     false
