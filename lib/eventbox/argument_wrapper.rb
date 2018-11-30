@@ -22,34 +22,35 @@ class Eventbox
         convs = []
         rets = []
         parameters.each_with_index do |(t, n), i|
+          €var = n.to_s.start_with?("€")
           case t
           when :req
             decls << n
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n} = WrappedObject.new(#{n}, source_event_loop, :#{n})"
             end
             rets << n
           when :opt
             decls << "#{n}=nil"
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n} = #{n} ? WrappedObject.new(#{n}, source_event_loop, :#{n}) : []"
             end
             rets << "*#{n}"
           when :rest
             decls << "*#{n}"
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n}.map!{|v| WrappedObject.new(v, source_event_loop, :#{n}) }"
             end
             rets << "*#{n}"
           when :keyreq
             decls << "#{n}:"
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n} = WrappedObject.new(#{n}, source_event_loop, :#{n})"
             end
             rets << "#{n}: #{n}"
           when :key
             decls << "#{n}:nil"
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n} = #{n} ? {#{n}: WrappedObject.new(#{n}, source_event_loop, :#{n})} : {}"
             else
               convs << "#{n} = #{n} ? {#{n}: #{n}} : {}"
@@ -57,12 +58,12 @@ class Eventbox
             rets << "**#{n}"
           when :keyrest
             decls << "**#{n}"
-            if n.to_s.start_with?("€")
+            if €var
               convs << "#{n}.each{|k, v| #{n}[k] = WrappedObject.new(v, source_event_loop, :#{n}) }"
             end
             rets << "**#{n}"
           when :block
-            if n.to_s.start_with?("€")
+            if €var
               raise "block to `#{name}' can't be wrapped"
             end
           end
