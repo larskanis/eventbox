@@ -38,15 +38,18 @@ class Eventbox
     end
 
     class Alarm
+      # @private
       def initialize(ts, &block)
         @timestamp = ts
         @block = block
       end
 
+      # @private
       attr_reader :timestamp
     end
 
     class OneTimeAlarm < Alarm
+      # @private
       def fire_then_repeat?(now=Time.now)
         @block.call
         false
@@ -54,11 +57,13 @@ class Eventbox
     end
 
     class RepeatedAlarm < Alarm
+      # @private
       def initialize(ts, every_seconds, &block)
         super(ts, &block)
         @every_seconds = every_seconds
       end
 
+      # @private
       def fire_then_repeat?(now=Time.now)
         @block.call
         @timestamp = now + @every_seconds
@@ -68,6 +73,7 @@ class Eventbox
 
     extend Boxable
 
+    # @private
     private async_call def init(*args)
       super
       @timer_alarms = []
@@ -137,6 +143,7 @@ class Eventbox
       timer_check_integrity
     end
 
+    # @private
     private def timer_check_integrity
       @timer_alarms.inject(nil) do |min, a|
         raise InternalError, "alarms are not ordered: #{@timer_alarms.inspect}" if min && min < a.timestamp
