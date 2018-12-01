@@ -217,15 +217,18 @@ class Eventbox
     end
   end
 
-  # An Action object is returned by {Eventbox#action} and optionally passed as last argument.
+  # An Action object is thin wrapper for a Ruby thread.
+  #
+  # It is returned by {Eventbox#action} and optionally passed as last argument to action methods.
   # It can be used to interrupt the program execution by an exception.
   #
-  # However in contrast to ruby's builtin threads, by default any exceptions sent to the action thread are delayed until a code block is reached which explicit allows interruption.
+  # However in contrast to ruby's builtin threads, any interruption must be explicit allowed.
+  # Exceptions raised to an action thread are delayed until a code block is reached which explicit allows interruption.
   # The only exception which is delivered to the action thread by default is {Eventbox::AbortAction}.
-  # It is raised by {shutdown} and is delivered as soon as a blocking operation is executed.
+  # It is raised by {Eventbox#shutdown!} and is delivered as soon as a blocking operation is executed.
   #
   # An Action object can be used to stop the action while blocking operations.
-  # Make sure, that the `rescue` statement is outside of the block to `handle_interrupt`.
+  # It should be made sure, that the `rescue` statement is outside of the block to `handle_interrupt`.
   # Otherwise it could happen, that the rescuing code is interrupted by the signal.
   # Sending custom signals to an action works like:
   #
@@ -262,6 +265,9 @@ class Eventbox
     # See {Action} about asynchronous delivery of signals.
     #
     # This method does nothing if the action is already finished.
+    #
+    # If {raise} is called within the action (#current? returns `true`), all exceptions are delivered immediately.
+    # This happens regardless of the current interrupt mask set by `Thread.handle_interrupt`.
     def raise(*args)
       # ignore raise, if sent from the action thread
       if AbortAction === args[0] || (Module === args[0] && args[0].ancestors.include?(AbortAction))

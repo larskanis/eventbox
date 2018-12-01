@@ -155,6 +155,7 @@ class Eventbox
   #
   # {init} can be defined as either {sync_call} or {async_call} with no difference.
   # {init} can also be defined as {yield_call}, so that the +new+ call is blocked until the result is yielded.
+  # {init} can even be defined as {action}, so that each instance of the class immediately starts a new thread.
   def init(*args)
   end
 
