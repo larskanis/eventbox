@@ -200,9 +200,10 @@ class Eventbox
       with_block_or_def(name, block) do |*args, &cb|
         raise InvalidAccess, "action must not be called with a block" if cb
 
+        gc_actions = self.class.eventbox_options[:gc_actions]
         sandbox = self.class.allocate
         sandbox.instance_variable_set(:@__event_loop__, @__event_loop__)
-        sandbox.instance_variable_set(:@__eventbox__, WeakRef.new(self))
+        sandbox.instance_variable_set(:@__eventbox__, gc_actions ? WeakRef.new(self) : self)
         meth = unbound_method.bind(sandbox)
 
         if @__event_loop__.event_scope?

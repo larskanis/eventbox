@@ -47,6 +47,7 @@ class Eventbox
     {
       threadpool: Thread,
       guard_time: 0.5,
+      gc_actions: false,
     }
   end
 
@@ -64,6 +65,8 @@ class Eventbox
   #   * Set to a +Numeric+ value: Maximum number of seconds allowed for event scope methods.
   #   * Set to a +Proc+ object: Called after each call to an event scope method.
   #     The +Proc+ object is called with the number of seconds the call took as first and the name as second argument.
+  # @param gc_actions [Boolean] Enable or disable (default) garbage collection of running actions.
+  #   Setting this to true permits the garbage collector to shutdown running action threads and subsequently delete the corresponding Eventbox object.
   def self.with_options(**options)
     Class.new(self) do
       define_singleton_method(:eventbox_options) do
@@ -249,13 +252,13 @@ class Eventbox
     @__event_loop__.shared_object(object)
   end
 
-  # Force stop of all action threads spawned by this {Eventbox} instance
+  # Force stop of all action threads spawned by this {Eventbox} instance.
   #
-  # Cleanup of threads will be done through the garbage collector otherwise.
+  # It is possible to enable automatic cleanup of action threads by the garbage collector through {Eventbox.with_options}.
   # However in some cases automatic garbage collection doesn't remove all instances due to running action threads.
   # Calling shutdown! when the work of the instance is done, ensures that it is GC'ed in all cases.
   #
-  # If {shutdown!} is called externally, it blocks until all actions threads terminated.
+  # If {shutdown!} is called externally, it blocks until all actions threads have terminated.
   #
   # If {shutdown!} is called in the event scope, it just triggers the termination of all action threads and returns afterwards.
   # Optionally {shutdown!} can be called with a block.

@@ -9,14 +9,14 @@ class EventboxOptionsTest < Minitest::Test
     if RUBY_ENGINE=='jruby'
       skip "JRuby might use alternative Thread class."
     else
-      assert_equal({threadpool: Thread, guard_time: 0.5}, Eventbox.eventbox_options)
+      assert_equal({threadpool: Thread, guard_time: 0.5, :gc_actions=>false}, Eventbox.eventbox_options)
     end
   end
 
   def test_with_options
     kl = TestBox.with_options(threadpool: Thread).with_options(www: 1)
-    assert_equal "EventboxOptionsTest::TestBox{:threadpool=>Thread, :guard_time=>0.5, :www=>1}", kl.inspect
-    assert_equal({threadpool: Thread, guard_time: 0.5, www: 1}, kl.eventbox_options)
+    assert_equal "EventboxOptionsTest::TestBox{:threadpool=>Thread, :guard_time=>0.5, :gc_actions=>false, :www=>1}", kl.inspect
+    assert_equal({threadpool: Thread, guard_time: 0.5, :gc_actions=>false, www: 1}, kl.eventbox_options)
   end
 
   def test_threadpool_option
