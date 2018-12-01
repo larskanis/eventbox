@@ -211,7 +211,7 @@ Code in the event scope is based on an event driven programming style where even
 
 The event scope shouldn't be used to do blocking operations.
 There is no hard criteria for what is considered a blocking operation, but since event scope methods of one object don't run concurrently, it decreases the overall responsiveness of the Eventbox instance.
-If the processing time of an event scope method or block exceeds the limit of 0.5 seconds, a warning is print to STDERR.
+If the processing time of an event scope method or block exceeds the limit of 0.5 seconds, a warning is print to `STDERR`.
 This limit can be changed by {Eventbox.with_options}.
 
 Arguments of async, sync and yield calls can be prefixed by a € sign.
