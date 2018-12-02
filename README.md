@@ -118,80 +118,14 @@ However if you want to cancel items in the queue for example, you need more cont
 The same if you want to query and visualize the internal state of processing - that means the pending items in the queue.
 
 
-### A more practical example
+### Hands on
 
-Let's continue with an example which shows how {Eventbox} is typically used.
-The following class downloads a list of URLs in parallel.
+The following examples illustrate most important aspects of Eventbox.
+It is recommended to work them through, in order to fully understand how Eventbox can be used to implement all kind of multi-threaded applications.
 
-```ruby
-require "eventbox"
-require "net/https"
-require "open-uri"
-require "pp"
-
-# Build a new Eventbox based class, which makes use of a pool of two threads.
-# This way the number of concurrent downloads is limited to 3.
-class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(3))
-
-  # Called at ParallelDownloads.new just like Object#initialize in ordinary ruby classes
-  # Yield calls get one additional argument and suspend the caller until result.yield is invoked
-  yield_call def init(urls, result)
-    @urls = urls
-    @urls.each do |url|             # Start a download thread for each URL
-      start_download(url)           # Start the download - the call returns immediately
-    end
-    # It's safe to set instance variables after start_download
-    @downloads = {}                 # The result hash with all downloads
-    @finished = result              # Don't return to the caller, but store result yielder for later
-  end
-
-  # Each call to an action method starts a new thread
-  # Actions don't have access to instance variables.
-  private action def start_download(url)
-    data = OpenURI.open_uri(url)    # HTTP GET url
-      .read(100).each_line.first    # Retrieve the first line but max 100 bytes
-  rescue SocketError => err         # Catch any network errors
-    download_finished(url, err)     # and store it in the result hash
-  else
-    download_finished(url, data)    # ... or store the retrieved data when successful
-  end
-
-  # Called for each finished download
-  private sync_call def download_finished(url, res)
-    @downloads[url] = res           # Store the download result in the result hash
-    if @downloads.size == @urls.size # All downloads finished?
-      @finished.yield               # Finish ParallelDownloads.new
-    end
-  end
-
-  attr_reader :downloads            # Threadsafe access to @download
-end
-
-urls = %w[
-  http://ruby-lang.org
-  http://ruby-lang.ooorg
-  http://wikipedia.org
-  http://torproject.org
-  http://github.com
-]
-
-d = ParallelDownloads.new(urls)
-pp d.downloads
-```
-
-This returns output like the following.
-The order depends on the particular response time of the URL.
-
-```ruby
-{"http://ruby-lang.ooorg"=>#<SocketError: Failed to open TCP connection to ruby-lang.ooorg:80 (getaddrinfo: Name or service not known)>,
- "http://wikipedia.org"=>"<!DOCTYPE html>\n",
- "http://torproject.org"=>"<div class=\"eoy-background\">\n",
- "http://ruby-lang.org"=>"<!DOCTYPE html>\n",
- "http://github.com"=>"\n"}
-```
-
-Since Eventbox protects from data races, it's insignificant in which order events are emitted by an event scope method and whether objects are changed after being sent.
-It's therefore OK to set `@downloads` both before or after starting the action threads per `start_download` in `init`.
+* {file:doc/downloads.md HTTP client} - Understand how to use actions to build a HTTP client which downloads several URLs in parallel.
+* {file:doc/server.md TCP server} - Understand how to startup and shutdown blocking actions and to combine several Eventbox classes to handle parallel connections.
+* {file:doc/threadpool.md Thread-pool} - Understand how parallel external requests can be serialized and scheduled.
 
 
 ## Method types
@@ -356,7 +290,7 @@ See the description of {Eventbox::Boxable} for how it works.
 
 ## When to use Eventbox?
 
-Eventbox comes into action when things are getting more complicated or more customized.
+Eventbox comes into play when things are getting more complicated or more customized.
 For instance a module which shall distribute work orders to external processes.
 When it shall visualize the progress and allow cancellation of orders, available abstractions don't fit well to the problem.
 
