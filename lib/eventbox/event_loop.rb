@@ -326,7 +326,7 @@ class Eventbox
         @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
         nil
       else
-        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call or event scope proc")
+        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc")
       end
     end
 
