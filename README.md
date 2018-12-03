@@ -18,7 +18,7 @@ Such data races between event scope and external/action scope are avoided throug
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
 Eventbox is a model of concurrent computation that is used to build thread-safe objects with arbitrary interfaces.
-It is kind of [advancement](https://www.rubydoc.info/github/larskanis/eventbox/master#The_Actor_model) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+It is kind of [advancement](#comparison-threading-abstractions) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
 
 * [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master)
 
@@ -305,6 +305,7 @@ Due to Eventbox's checks and guaranties it's easier to verify and prove correctn
 This was the primary motivation to develop this library.
 
 
+<a name="comparison-threading-abstractions"></a>
 ## Comparison with other threading abstractions
 
 ### The Actor model
