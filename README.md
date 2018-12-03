@@ -357,7 +357,7 @@ This is in contrast to libraries like [async](https://github.com/socketry/async)
 Eventbox is reasonably fast, but far from the performance of low level threading primitives (like implemented in [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby) ).
 It is not written to minimize resource consumption or maximize performance or throughput.
 Instead it is written to minimize race conditions and implementation complexity in a multithreaded environment.
-It also does a lot of safety checks to support the developer.
+And it is written to act as a solid and consistent foundation for a wide range of concurrent computation problems.
 
 So if your use case requires raw performance more than implementation safety, Eventbox is probably not the right tool.
 
