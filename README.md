@@ -123,9 +123,9 @@ The same if you want to query and visualize the internal state of processing - t
 The following examples illustrate most important aspects of Eventbox.
 It is recommended to work them through, in order to fully understand how Eventbox can be used to implement all kind of multi-threaded applications.
 
-* {file:doc/downloads.md HTTP client} - Understand how to use actions to build a HTTP client which downloads several URLs in parallel.
-* {file:doc/server.md TCP server} - Understand how to startup and shutdown blocking actions and to combine several Eventbox classes to handle parallel connections.
-* {file:doc/threadpool.md Thread-pool} - Understand how parallel external requests can be serialized and scheduled.
+* {file:docs/downloads.md HTTP client} - Understand how to use actions to build a HTTP client which downloads several URLs in parallel.
+* {file:docs/server.md TCP server} - Understand how to startup and shutdown blocking actions and to combine several Eventbox classes to handle parallel connections.
+* {file:docs/threadpool.md Thread-pool} - Understand how parallel external requests can be serialized and scheduled.
 
 
 ## Method types
