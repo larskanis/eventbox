@@ -4,3 +4,6 @@
 --private
 --no-private
 --embed-mixin Eventbox::Boxable
+lib/**/*.rb
+-
+docs/**/*.md
