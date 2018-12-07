@@ -8,6 +8,8 @@ class Eventbox
   #
   # All methods prefixed with "_" requires @mutex acquired to be called.
   class EventLoop
+    attr_reader :latest_answer_queue
+
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
       @running_actions = []
@@ -140,7 +142,7 @@ class Eventbox
 
     def yield_call(box, name, args, kwargs, block, answer_queue, wrapper)
       with_call_frame(name, answer_queue) do |source_event_loop|
-        args << _completion_proc(answer_queue, name, source_event_loop)
+        args << new_completion_proc(answer_queue, name, source_event_loop)
         args << kwargs unless kwargs.empty?
         args = wrapper.call(source_event_loop, *args) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
@@ -174,7 +176,7 @@ class Eventbox
     # Anonymous version of yield_call
     def yield_proc_call(pr, args, kwargs, arg_block, answer_queue, wrapper)
       with_call_frame(YieldProc, answer_queue) do |source_event_loop|
-        args << _completion_proc(answer_queue, pr, source_event_loop)
+        args << new_completion_proc(answer_queue, pr, source_event_loop)
         args << kwargs unless kwargs.empty?
         args = wrapper.call(source_event_loop, *args) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
@@ -216,7 +218,7 @@ class Eventbox
           # called externally
           answer_queue = Queue.new
           sel = sync_proc_call(block, args, arg_block, answer_queue, wrapper)
-          callback_loop(answer_queue, sel)
+          callback_loop(answer_queue, sel, block)
         end
       end
     end
@@ -227,7 +229,7 @@ class Eventbox
       YieldProc.new do |*args, **kwargs, &arg_block|
         if event_scope?
           # called in the event scope
-          safe_yield_result(args, block)
+          internal_yield_result(args, block)
           args << kwargs unless kwargs.empty?
           block.yield(*args, &arg_block)
           nil
@@ -235,12 +237,12 @@ class Eventbox
           # called externally
           answer_queue = Queue.new
           sel = yield_proc_call(block, args, kwargs, arg_block, answer_queue, wrapper)
-          callback_loop(answer_queue, sel)
+          callback_loop(answer_queue, sel, block)
         end
       end
     end
 
-    def safe_yield_result(args, name)
+    def internal_yield_result(args, name)
       complete = args.last
       unless Proc === complete
         if Proc === name
@@ -252,9 +254,9 @@ class Eventbox
       args[-1] = proc do |*cargs, &cblock|
         unless complete
           if Proc === name
-            raise MultipleResults, "received multiple results for #{name.inspect}"
+            raise MultipleResults, "second result yielded for #{name.inspect} that already returned"
           else
-            raise MultipleResults, "received multiple results for method `#{name}'"
+            raise MultipleResults, "second result yielded for method `#{name}' that already returned"
           end
         end
         res = complete.yield(*cargs, &cblock)
@@ -263,13 +265,15 @@ class Eventbox
       end
     end
 
-    private def _completion_proc(answer_queue, name, source_event_loop)
+    private def new_completion_proc(answer_queue, name, source_event_loop)
       new_async_proc(name, CompletionProc) do |*resu|
         unless answer_queue
+          # It could happen, that two threads call the CompletionProc simultanously so that nothing is raised here.
+          # In this case the failure is caught in callback_loop instead, but in all other cases the failure is raised early here at the caller side.
           if Proc === name
-            raise MultipleResults, "received multiple results for #{name.inspect}"
+            raise MultipleResults, "second result yielded for #{name.inspect} that already returned"
           else
-            raise MultipleResults, "received multiple results for method `#{name}'"
+            raise MultipleResults, "second result yielded for method `#{name}' that already returned"
           end
         end
         resu = Sanitizer.sanitize_values(resu, self, source_event_loop)
@@ -279,7 +283,7 @@ class Eventbox
       end
     end
 
-    def callback_loop(answer_queue, source_event_loop)
+    def callback_loop(answer_queue, source_event_loop, name)
       loop do
         rets = answer_queue.deq
         case rets
@@ -291,11 +295,32 @@ class Eventbox
             external_proc_result(rets.cbresult, cbres)
           end
         when WrappedException
-          answer_queue.close if answer_queue.respond_to?(:close)
+          close_answer_queue(answer_queue, name)
           raise(*rets.exc)
         else
-          answer_queue.close if answer_queue.respond_to?(:close)
+          close_answer_queue(answer_queue, name)
           return rets
+        end
+      end
+    end
+
+    private def close_answer_queue(answer_queue, name)
+      answer_queue.close
+      unless answer_queue.empty?
+        rets = answer_queue.deq
+        case rets
+        when Callback
+          if Proc === name
+            raise InvalidAccess, "closure can't be called through #{name.inspect}, since it already returned"
+          else
+            raise InvalidAccess, "closure can't be called through method `#{name}', since it already returned"
+          end
+        else
+          if Proc === name
+            raise MultipleResults, "second result yielded for #{name.inspect} that already returned"
+          else
+            raise MultipleResults, "second result yielded for method `#{name}' that already returned"
+          end
         end
       end
     end
@@ -319,15 +344,25 @@ class Eventbox
 
     Callback = Struct.new :block, :args, :arg_block, :cbresult
 
-    def _external_proc_call(block, name, args, arg_block, cbresult, source_event_loop)
+    def _external_proc_call(block, name, args, arg_block, cbresult, source_event_loop, creation_answer_queue)
+      args = Sanitizer.sanitize_values(args, self, source_event_loop)
+      arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
+      cb = Callback.new(block, args, arg_block, cbresult)
+
       if @latest_answer_queue
-        args = Sanitizer.sanitize_values(args, self, source_event_loop)
-        arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
-        @latest_answer_queue << Callback.new(block, args, arg_block, cbresult)
-        nil
+        # proc called by a sync or yield call/proc context
+        @latest_answer_queue << cb
+      elsif creation_answer_queue
+        # proc called by a async call/proc context, but defined by a yield_call
+        if creation_answer_queue.closed?
+          raise InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by a 'async' method/proc after the defining method/proc returned - either change the yielding context from 'async' to a 'sync' or 'yield' or yield the value before the defining context returns"
+        end
+        creation_answer_queue << cb
       else
-        raise(InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc")
+        raise InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc"
       end
+
+      nil
     end
 
     def start_action(meth, name, args)

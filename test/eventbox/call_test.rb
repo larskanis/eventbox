@@ -184,7 +184,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     ex = assert_raises(Eventbox::MultipleResults) { eb.new }
-    assert_match(/multiple results for method `y'/, ex.to_s)
+    assert_match(/second result yielded for method `y'/, ex.to_s)
   end
 
   def test_intern_yield_call_without_proc
@@ -227,7 +227,7 @@ class EventboxCallTest < Minitest::Test
       end.new
 
       ex = assert_raises(Eventbox::MultipleResults) { eb.doit; eb.trigger }
-      assert_match(/multiple results for method `doit'/, ex.to_s)
+      assert_match(/second result yielded for method `doit'/, ex.to_s)
     end
   end
 
@@ -563,7 +563,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     ex = assert_raises(Eventbox::MultipleResults) { eb.new }
-    assert_match(/multiple results for #<Proc:/, ex.to_s)
+    assert_match(/second result yielded for #<Proc:/, ex.to_s)
   end
 
   def test_intern_yield_proc_without_proc
@@ -619,7 +619,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = fc.pr
     err = assert_raises(Eventbox::MultipleResults){ pr.call }
-    assert_match(/received multiple results for #<Proc:/, err.to_s)
+    assert_match(/second result yielded for #<Proc:/, err.to_s)
   end
 
   def test_yield_proc_called_externally_with_completion_block
@@ -679,6 +679,143 @@ class EventboxCallTest < Minitest::Test
 
     err = assert_raises(Eventbox::InvalidAccess){ fc.go }
     assert_match(/closure defined by `init' was yielded by `go'/, err.to_s)
+  end
+
+  def test_external_block_called_by_async_call
+    eb = Class.new(Eventbox) do
+      yield_call def init(result, &block)
+        @block = block
+        start_response(result)
+      end
+
+      action def start_response(result)
+        go(result)
+      end
+
+      async_call def go(result)
+        @block.call("a", proc { result.yield })
+      end
+    end
+
+    a = []
+    eb.new {|v| a << [v, Thread.current] }
+    assert_equal [["a", Thread.current]], a
+  end
+
+  def test_external_block_called_by_async_proc
+    eb = Class.new(Eventbox) do
+      yield_call def init(result, &block)
+        start_response(async_proc do
+          block.call("a", proc do
+            result.yield
+          end)
+        end)
+      end
+
+      action def start_response(pr)
+        pr.yield
+      end
+    end
+
+    a = []
+    eb.new {|v| a << [v, Thread.current] }
+    assert_equal [["a", Thread.current]], a
+  end
+
+  def test_external_block_defined_by_yield_proc_and_called_by_async_proc
+    eb = Class.new(Eventbox) do
+      sync_call def go
+        yield_proc do |result, &block|
+          start_response(async_proc do
+            block.call("a", proc do
+              result.yield
+            end)
+          end)
+        end
+      end
+
+      action def start_response(pr)
+        pr.yield
+      end
+    end
+
+    a = []
+    eb.new.go.call {|v| a << [v, Thread.current] }
+    assert_equal [["a", Thread.current]], a
+  end
+
+  def test_external_block_called_by_sync_proc
+    eb = Class.new(Eventbox) do
+      yield_call def init(result, &block)
+        start_response(sync_proc do
+          block.call("c", proc do
+            result.yield
+          end)
+        end)
+      end
+
+      action def start_response(pr)
+        pr.yield
+      end
+    end
+
+    a = []
+    eb.new {|v| a << [v, Thread.current] }
+    assert_equal 1, a.size
+    assert_equal "c", a[0][0]
+    refute_equal Thread.current, a[0][1]
+  end
+
+  def test_external_block_called_by_async_call_after_return
+    ec = Class.new(Eventbox) do
+      sync_call def init(&block)
+        @block = block
+      end
+
+      yield_call def go1(result)
+        start_response(result)
+      end
+
+      action def start_response(result)
+        go2(result)
+      end
+
+      async_call def go2(result)
+        @block.call("c", proc { result.yield })
+      end
+    end
+
+    eb = ec.new {}
+    with_report_on_exception(false) do
+      err = assert_raises(Eventbox::InvalidAccess) { eb.go1 }
+      assert_match(/closure defined by `init' was yielded by .* after .* returned/, err.to_s)
+    end
+  end
+
+  def test_external_block_called_after_yield_result
+    eb = Class.new(Eventbox) do
+      yield_call def value(result, &block)
+        result.yield
+        block.call
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess) { eb.value{} }
+    assert_match(/closure can't be called through method `value'/, err.to_s)
+  end
+
+  def test_external_block_called_after_raise_result
+    eb = Class.new(Eventbox) do
+      sync_call def raising_proc
+        yield_proc do |result, &block|
+          result.raise
+          block.call
+        end
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess) { eb.raising_proc.call{} }
+    assert_match(/closure can't be called through .*call_test\.rb/, err.to_s)
   end
 
   def test_external_async_call_with_deferred_callback

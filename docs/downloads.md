@@ -53,14 +53,14 @@ class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool
   private action def start_download(url)
     data = OpenURI.open_uri(url)    # HTTP GET url
       .read(100).each_line.first    # Retrieve the first line but max 100 bytes
-  rescue SocketError => err         # Catch any network errors
+  rescue => err         # Catch any network errors
     download_finished(url, err)     # and store it in the result hash
   else
     download_finished(url, data)    # ... or store the retrieved data when successful
   end
 
   # Called for each finished download
-  private sync_call def download_finished(url, res)
+  private async_call def download_finished(url, res)
     @downloads[url] = res             # Store the download result in the result hash
     @progress&.yield(@downloads.size) # Notify the caller about our progress
     if @downloads.size == @urls.size  # All downloads finished?
@@ -113,7 +113,7 @@ class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool
   yield_call def init(urls, result, &progress)
     urls.each do |url|                   # Start a download thread for each URL
 
-      on_finished = sync_proc do |res|   # Create a closure object comparable to sync_call
+      on_finished = async_proc do |res|   # Create a closure object comparable to sync_call
         @downloads[url] = res            # Store the download result in the result hash
         progress&.yield(@downloads.size) # Notify the caller about our progress
         if @downloads.size == urls.size  # All downloads finished?

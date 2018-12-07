@@ -221,6 +221,7 @@ class Eventbox
 
     def wrap_proc(arg, name, source_event_loop, target_event_loop)
       if target_event_loop&.event_scope?
+        creation_answer_queue = target_event_loop.latest_answer_queue
         ExternalProc.new(arg, source_event_loop, name) do |*args, &block|
           if target_event_loop&.event_scope?
             # called in the event scope
@@ -228,7 +229,7 @@ class Eventbox
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
             end
             cbblock = args.last if Proc === args.last
-            target_event_loop._external_proc_call(arg, name, args, block, cbblock, source_event_loop)
+            target_event_loop._external_proc_call(arg, name, args, block, cbblock, source_event_loop, creation_answer_queue)
           else
             # called externally
             raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"

@@ -4,29 +4,40 @@ require_relative "../test_helper"
 
 class ExamplesDownloadsTest < Minitest::Test
   class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool.new(2))
-    yield_call def init(urls, result)
-      @urls =urls
-      @urls.each do |url|
-        start_download(url)
+    # Called at ParallelDownloads.new just like Object#initialize in ordinary ruby classes
+    # Yield calls get one additional argument and suspend the caller until result.yield is invoked
+    yield_call def init(urls, result, &progress)
+      @urls = urls
+      @urls.each do |url|             # Start a download thread for each URL
+        start_download(url)           # Start the download - the call returns immediately
       end
-      @downloads = {}
-      @finished = result
+      # It's safe to set instance variables after start_download
+      @downloads = {}                 # The result hash with all downloads
+      @finished = result              # Don't return to the caller, but store result yielder for later
+      @progress = progress
     end
 
+    # Each call to an action method starts a new thread
+    # Actions don't have access to instance variables.
     private action def start_download(url)
-      data = OpenURI.open_uri(url).read(100).each_line.first
-    rescue => err
-      download_finished(url, err)
+      data = OpenURI.open_uri(url)    # HTTP GET url
+        .read(100).each_line.first    # Retrieve the first line but max 100 bytes
+    rescue => err         # Catch any network errors
+      download_finished(url, err)     # and store it in the result hash
     else
-      download_finished(url, data)
+      download_finished(url, data)    # ... or store the retrieved data when successful
     end
 
-    private sync_call def download_finished(url, res)
-      @downloads[url] = res
-      @finished.yield if @downloads.size == @urls.size
+    # Called for each finished download
+    private async_call def download_finished(url, res)
+      @downloads[url] = res             # Store the download result in the result hash
+      @progress&.yield(@downloads.size) # Notify the caller about our progress
+      if @downloads.size == @urls.size  # All downloads finished?
+        @finished.yield                 # Finish ParallelDownloads.new
+      end
     end
 
-    attr_reader :downloads
+    attr_reader :downloads            # Threadsafe access to @download
   end
 
   def test_queue
@@ -40,7 +51,10 @@ class ExamplesDownloadsTest < Minitest::Test
       https://wikipedia.org
     ]
 
-    d = ParallelDownloads.new(urls)
+    a = []
+    d = ParallelDownloads.new(urls) { |v| a << v }
+    assert_equal urls.map.with_index(1).map{|_,i| i }, a
+
 #     require "pp"
 #     pp d.downloads
 

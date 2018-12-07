@@ -83,7 +83,7 @@ class Eventbox
         else
           answer_queue = Queue.new
           sel = @__event_loop__.sync_call(eventbox, name, args, cb, answer_queue, wrapper)
-          @__event_loop__.callback_loop(answer_queue, sel)
+          @__event_loop__.callback_loop(answer_queue, sel, name)
         end
       end
     end
@@ -115,14 +115,14 @@ class Eventbox
       wrapper = ArgumentWrapper.build(unbound_method, name)
       with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
-          @__event_loop__.safe_yield_result(args, name)
+          @__event_loop__.internal_yield_result(args, name)
           args << kwargs unless kwargs.empty?
           unbound_method.bind(eventbox).call(*args, &cb)
           self
         else
           answer_queue = Queue.new
           sel = @__event_loop__.yield_call(eventbox, name, args, kwargs, cb, answer_queue, wrapper)
-          @__event_loop__.callback_loop(answer_queue, sel)
+          @__event_loop__.callback_loop(answer_queue, sel, name)
         end
       end
     end
