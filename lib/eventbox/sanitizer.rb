@@ -296,7 +296,9 @@ class Eventbox
 
   # Wrapper for Proc objects created external of some Eventbox instance.
   #
-  # External Proc objects can be invoked from event scope through {Eventbox.sync_call} and {Eventbox.yield_call} methods.
+  # External Proc objects can be invoked from event scope through {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
+  # It's also possible to invoke it through {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external proc into the event scope, is a yield call that didn't return yet.
+  #
   # Optionally a proc can be provided as the last argument which acts as a completion callback.
   # This proc is invoked, when the call has finished, with the result value as argument.
   #
