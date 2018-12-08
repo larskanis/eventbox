@@ -46,12 +46,10 @@ class Eventbox
       # Separate the instance variables from the object
       ivns = arg.instance_variables
       ivvs = ivns.map do |ivn|
-        arg.instance_variable_get(ivn)
-      end
-
-      # Temporary set all instance variables to nil
-      ivns.each do |ivn|
+        ivv = arg.instance_variable_get(ivn)
+        # Temporary set all instance variables to nil
         arg.instance_variable_set(ivn, nil)
+        ivv
       end
 
       # Copy the object
@@ -60,10 +58,7 @@ class Eventbox
       # Restore the original object
       ivns.each_with_index do |ivn, ivni|
         arg.instance_variable_set(ivn, ivvs[ivni])
-      end
-
-      # sanitize instance variables independently and write them to the copied object
-      ivns.each_with_index do |ivn, ivni|
+        # sanitize instance variables independently and write them to the copied object
         ivv = sanitize_value(ivvs[ivni], source_event_loop, target_event_loop, ivn)
         arg2.instance_variable_set(ivn, ivv)
       end
@@ -84,9 +79,6 @@ class Eventbox
 
       ms.each_with_index do |m, i|
         arg[m] = vs[i]
-      end
-
-      ms.each_with_index do |m, i|
         v2 = sanitize_value(vs[i], source_event_loop, target_event_loop, m)
         arg2[m] = v2
       end
@@ -105,9 +97,6 @@ class Eventbox
 
       h.each do |k, v|
         arg[k] = v
-      end
-
-      h.each do |k, v|
         arg2[k] = sanitize_value(v, source_event_loop, target_event_loop, k)
       end
 
@@ -123,11 +112,8 @@ class Eventbox
 
       arg2 = yield(arg)
 
-      vs.each_index do |i|
-        arg[i] = vs[i]
-      end
-
       vs.each_with_index do |v, i|
+        arg[i] = vs[i]
         v2 = sanitize_value(v, source_event_loop, target_event_loop, name)
         arg2[i] = v2
       end
