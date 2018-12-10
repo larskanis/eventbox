@@ -54,9 +54,15 @@ class Eventbox
 
       # Copy the object
       arg2 = yield(arg)
-
-      # Restore the original object
+    rescue
+      # Restore the original object in case of Marshal.dump failure
       ivns.each_with_index do |ivn, ivni|
+        arg.instance_variable_set(ivn, ivvs[ivni])
+      end
+      raise
+    else
+      ivns.each_with_index do |ivn, ivni|
+        # Restore the original object
         arg.instance_variable_set(ivn, ivvs[ivni])
         # sanitize instance variables independently and write them to the copied object
         ivv = sanitize_value(ivvs[ivni], source_event_loop, target_event_loop, ivn)
@@ -76,7 +82,13 @@ class Eventbox
       end
 
       arg2 = yield(arg)
-
+    rescue
+      # Restore the original object in case of Marshal.dump failure
+      ms.each_with_index do |m, i|
+        arg[m] = vs[i]
+      end
+      raise
+    else
       ms.each_with_index do |m, i|
         arg[m] = vs[i]
         v2 = sanitize_value(vs[i], source_event_loop, target_event_loop, m)
@@ -94,7 +106,13 @@ class Eventbox
       end
 
       arg2 = yield(arg)
-
+    rescue
+      # Restore the original object in case of Marshal.dump failure
+      h.each do |k, v|
+        arg[k] = v
+      end
+      raise
+    else
       h.each do |k, v|
         arg[k] = v
         arg2[k] = sanitize_value(v, source_event_loop, target_event_loop, k)
@@ -111,7 +129,13 @@ class Eventbox
       end
 
       arg2 = yield(arg)
-
+    rescue
+      # Restore the original object in case of Marshal.dump failure
+      vs.each_with_index do |v, i|
+        arg[i] = vs[i]
+      end
+      raise
+    else
       vs.each_with_index do |v, i|
         arg[i] = vs[i]
         v2 = sanitize_value(v, source_event_loop, target_event_loop, name)
