@@ -246,9 +246,23 @@ class Eventbox
   # In all cases the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
   # It can therefore be used to modify the original object even after traversing the boundaries.
   #
-  # Wrapping and unwrapping works even if the shared object is stored within another object as instance variable or within a collection class.
-  #
   # The mark is stored for the lifetime of the object, so that it's enough to mark only once at object creation.
+  #
+  # Due to {Eventbox::Sanitizer Sanitizer dissection} of non-marshalable objects, wrapping and unwrapping works even if the shared object is stored within another object as instance variable or within a collection class.
+  # This is in contrast to €-variables which can only wrap the argument object as a whole when entering the event scope.
+  # See the difference here:
+  #
+  #   A = Struct.new(:a)
+  #   class Bo < Eventbox
+  #     sync_call def go(struct, €struct)
+  #       p struct            # prints #<struct A a=#<Eventbox::ExternalObject @object="abc" @name=:a>>
+  #       p €struct           # prints #<Eventbox::ExternalObject @object=#<struct A a="abc"> @name=:€struct>
+  #       [struct, €struct]
+  #     end
+  #   end
+  #   e = Bo.new
+  #   o = A.new(e.shared_object("abc"))
+  #   e.go(o, o)              # => [#<struct A a="abc">, #<struct A a="abc">]
   public def shared_object(object)
     @__event_loop__.shared_object(object)
   end
