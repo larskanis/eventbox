@@ -214,7 +214,7 @@ class Eventbox
             if block && !(WrappedProc === block)
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
             end
-            cbblock = args.last if Proc === args.last
+            cbblock = args.pop if Proc === args.last
             target_event_loop._external_proc_call(arg, name, args, block, cbblock, source_event_loop, creation_answer_queue)
           else
             # called externally

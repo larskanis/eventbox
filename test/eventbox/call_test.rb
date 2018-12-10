@@ -402,10 +402,11 @@ class EventboxCallTest < Minitest::Test
       end
     end.new
 
-    pr = proc do |n, ext_obj, ext_obj_klass, int_obj|
+    pr = proc do |n, ext_obj, ext_obj_klass, int_obj, unused_arg|
       assert_equal IO, ext_obj.class
       assert_equal Eventbox::WrappedObject, ext_obj_klass
       assert_equal Eventbox::WrappedObject, int_obj.class
+      assert_nil unused_arg
       [n + 1, IO.pipe[0]]
     end
 
