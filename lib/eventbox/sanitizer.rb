@@ -22,14 +22,14 @@ class Eventbox
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
   #
   # The following rules apply for wrapping/unwrapping:
-  # * If the object has been marked as {Eventbox#shared_object}, it is wrapped as {WrappedObject} depending on the direction of the data flow (return value or call argument).
+  # * If the object has been marked as {Eventbox#shared_object}, it is wrapped as {WrappedObject} or {ExternalObject} depending on the direction of the data flow (return value or call argument).
   # * If the object is a {WrappedObject} or {ExternalProc} and fits to the target scope, it is unwrapped.
   # Both cases even work if the object is encapsulated by another object.
   #
   # In all other cases the following rules apply:
   # * If the object is marshalable, it is passed as a deep copy through `Marshal.dump` and `Marshal.load` .
   # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
-  # * If the object can't be marshaled or dissected, it is wrapped as {WrappedObject}.
+  # * If the object can't be marshaled or dissected, it is wrapped as {ExternalObject} when passed from external scope to event scope and wrapped as {WrappedObject} when passed from the event scope.
   #   They are unwrapped when passed back to origin scope.
   # * Proc objects passed from event scope to external are wrapped as {WrappedObject}.
   #   They are unwrapped when passed back to event scope.
@@ -144,9 +144,9 @@ class Eventbox
           unless mel == source_event_loop
             raise InvalidAccess, "object #{arg.inspect} #{"wrapped by #{name} " if name} was marked as shared_object in a different eventbox object than the calling eventbox"
           end
-          WrappedObject.new(arg, mel, name)
+          wrap_object(arg, mel, target_event_loop, name)
         when ExternalSharedObject # External object marked as shared_object
-          WrappedObject.new(arg, source_event_loop, name)
+          wrap_object(arg, source_event_loop, target_event_loop, name)
         else
           # Not tagged -> try to deep copy the object
           begin
@@ -225,6 +225,15 @@ class Eventbox
         WrappedObject.new(arg, source_event_loop, name)
       end
     end
+
+    def wrap_object(object, source_event_loop, target_event_loop, name)
+      if target_event_loop&.event_scope?
+        creation_answer_queue = target_event_loop.latest_answer_queue
+        ExternalObject.new(object, source_event_loop, target_event_loop, creation_answer_queue, name)
+      else
+        WrappedObject.new(object, source_event_loop, name)
+      end
+    end
   end
 
   # Generic wrapper for objects that are passed through a foreign scope as reference.
@@ -245,6 +254,28 @@ class Eventbox
 
     def inspect
       "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect}>"
+    end
+  end
+
+  class ExternalObject < WrappedObject
+    def initialize(object, event_loop, target_event_loop, creation_answer_queue, name=nil)
+      super(object, event_loop, name)
+      @target_event_loop = target_event_loop
+      @creation_answer_queue = creation_answer_queue
+    end
+
+    def send_async(method, *args, &block)
+      if @target_event_loop&.event_scope?
+        # called in the event scope
+        if block && !(WrappedProc === block)
+          raise InvalidAccess, "calling `#{method}' with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
+        end
+        cbblock = args.pop if Proc === args.last
+        @target_event_loop._external_object_call(@object, method, @name, args, block, cbblock, @event_loop, @creation_answer_queue)
+      else
+        # called externally
+        raise InvalidAccess, "external object #{self.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"
+      end
     end
   end
 

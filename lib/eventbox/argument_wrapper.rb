@@ -27,31 +27,31 @@ class Eventbox
           when :req
             decls << n
             if €var
-              convs << "#{n} = WrappedObject.new(#{n}, source_event_loop, :#{n})"
+              convs << "#{n} = Sanitizer.wrap_object(#{n}, source_event_loop, target_event_loop, :#{n})"
             end
             rets << n
           when :opt
             decls << "#{n}=nil"
             if €var
-              convs << "#{n} = #{n} ? WrappedObject.new(#{n}, source_event_loop, :#{n}) : []"
+              convs << "#{n} = #{n} ? Sanitizer.wrap_object(#{n}, source_event_loop, target_event_loop, :#{n}) : []"
             end
             rets << "*#{n}"
           when :rest
             decls << "*#{n}"
             if €var
-              convs << "#{n}.map!{|v| WrappedObject.new(v, source_event_loop, :#{n}) }"
+              convs << "#{n}.map!{|v| Sanitizer.wrap_object(v, source_event_loop, target_event_loop, :#{n}) }"
             end
             rets << "*#{n}"
           when :keyreq
             decls << "#{n}:"
             if €var
-              convs << "#{n} = WrappedObject.new(#{n}, source_event_loop, :#{n})"
+              convs << "#{n} = Sanitizer.wrap_object(#{n}, source_event_loop, target_event_loop, :#{n})"
             end
             rets << "#{n}: #{n}"
           when :key
             decls << "#{n}:nil"
             if €var
-              convs << "#{n} = #{n} ? {#{n}: WrappedObject.new(#{n}, source_event_loop, :#{n})} : {}"
+              convs << "#{n} = #{n} ? {#{n}: Sanitizer.wrap_object(#{n}, source_event_loop, target_event_loop, :#{n})} : {}"
             else
               convs << "#{n} = #{n} ? {#{n}: #{n}} : {}"
             end
@@ -59,7 +59,7 @@ class Eventbox
           when :keyrest
             decls << "**#{n}"
             if €var
-              convs << "#{n}.each{|k, v| #{n}[k] = WrappedObject.new(v, source_event_loop, :#{n}) }"
+              convs << "#{n}.each{|k, v| #{n}[k] = Sanitizer.wrap_object(v, source_event_loop, target_event_loop, :#{n}) }"
             end
             rets << "**#{n}"
           when :block
@@ -68,7 +68,7 @@ class Eventbox
             end
           end
         end
-        code = "#{is_proc ? :proc : :lambda} do |source_event_loop#{decls.map{|s| ",#{s}"}.join }| # #{name}\n  #{convs.join("\n")}\n  [#{rets.join(",")}]\nend"
+        code = "#{is_proc ? :proc : :lambda} do |source_event_loop, target_event_loop#{decls.map{|s| ",#{s}"}.join }| # #{name}\n  #{convs.join("\n")}\n  [#{rets.join(",")}]\nend"
         instance_eval(code, "wrapper code defined in #{__FILE__}:#{__LINE__} for #{name}")
       end
     end

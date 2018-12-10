@@ -240,10 +240,10 @@ class Eventbox
   # Mark an object as to be shared instead of copied.
   #
   # A marked object is never passed as copy, but passed as reference.
-  # The object is therefore wrapped as {WrappedObject} when used in an unsafe scope.
-  # Wrapping as {WrappedObject} denies access from external/action scope to event scope objects and vice versa.
-  # It also denies access to objects originated from a foreign event scope.
-  # However the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
+  # The object is therefore wrapped as {WrappedObject} or {ExternalObject} when used in an unsafe scope.
+  # Objects marked within the event scope are wrapped as {WrappedObject}, which denies access from external/action scope or the event scope of a different Eventbox instance.
+  # Objects marked in external/action scope are wrapped as {ExternalObject} which allows {External.send_async asynchronous calls} from event scope.
+  # In all cases the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
   # It can therefore be used to modify the original object even after traversing the boundaries.
   #
   # Wrapping and unwrapping works even if the shared object is stored within another object as instance variable or within a collection class.

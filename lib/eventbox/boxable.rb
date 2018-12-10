@@ -36,7 +36,7 @@ class Eventbox
     #
     # The created method can be safely called from any thread.
     # All method arguments are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::WrappedObject}.
+    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
@@ -70,7 +70,7 @@ class Eventbox
     # Blocks are executed by the same thread that calls the {sync_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::WrappedObject}.
+    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
@@ -106,7 +106,7 @@ class Eventbox
     # Blocks are executed by the same thread that calls the {yield_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::WrappedObject}.
+    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.

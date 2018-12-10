@@ -100,7 +100,7 @@ class EventboxCallTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal Eventbox::WrappedObject, eb.values[2]
+    assert_equal Eventbox::ExternalObject, eb.values[2]
     assert_equal eb.thread, eb.values[3]
   end
 
@@ -139,7 +139,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new(123, IO.pipe.first)
 
-    assert_equal Eventbox::WrappedObject, eb.values[1], "result is passed to superclass"
+    assert_equal Eventbox::ExternalObject, eb.values[1], "result is passed to superclass"
     assert_equal eb.thread, eb.values[3], "superclass was called"
     assert_equal eb.thread, eb.values[4], "Methods in derived and superclass are called from the same thread"
   end
@@ -247,7 +247,7 @@ class EventboxCallTest < Minitest::Test
 
     assert_equal String, eb.values[0]
     assert_equal Eventbox::ExternalProc, eb.values[1]
-    assert_equal Eventbox::WrappedObject, eb.values[2]
+    assert_equal Eventbox::ExternalObject, eb.values[2]
     assert_equal eb.thread, eb.values[3]
   end
 
@@ -301,7 +301,18 @@ class EventboxCallTest < Minitest::Test
     assert_equal "abc", fc.shared_object(str)
     value = fc.out(str)
 
-    assert_equal [str, "Eventbox::WrappedObject"], value
+    assert_equal [str, "Eventbox::ExternalObject"], value
+  end
+
+  def test_external_object_call_tagged
+    fc = Class.new(Eventbox) do
+      yield_call def go(str, result)
+        str.send_async :strip, ->(v){ result.yield v }
+      end
+    end.new
+
+    str = fc.shared_object("  abc  ".dup)
+    assert_equal "abc", fc.go(str)
   end
 
   def test_internal_object_sync_call
@@ -339,6 +350,16 @@ class EventboxCallTest < Minitest::Test
     assert_nil fc.go(pr, "a")
   end
 
+  def test_external_object_called_internally_should_return_nil
+    fc = Class.new(Eventbox) do
+      sync_call def go(€ext_obj)
+        €ext_obj.send_async(:concat, "b")
+      end
+    end.new
+
+    assert_nil fc.go("a")
+  end
+
   def test_external_proc_called_internally_without_completion_block
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
@@ -350,6 +371,18 @@ class EventboxCallTest < Minitest::Test
     pr = proc { |n| a = n; }
     fc.new(pr)
     assert_equal 5, a
+  end
+
+  def test_external_object_called_internally_without_completion_block
+    fc = Class.new(Eventbox) do
+      sync_call def init(€ext_obj)
+        €ext_obj.send_async(:concat, "b")
+      end
+    end
+
+    a = "a"
+    fc.new(a)
+    assert_equal "ab", a
   end
 
   def test_external_proc_called_internally_with_sync_block
@@ -364,6 +397,20 @@ class EventboxCallTest < Minitest::Test
     pr = proc { |n, &block| block.yield(n+"c") }
     res = fc.go(pr, "a")
     assert_equal "abcd", res
+  end
+
+  def test_external_object_called_internally_with_sync_block
+    fc = Class.new(Eventbox) do
+      yield_call def go(€str, result)
+        €str.send_async(:each_char, &sync_proc do |r|
+          result.yield(r+"b")
+        end)
+      end
+    end.new
+
+    a = "a"
+    res = fc.go(a)
+    assert_equal "ab", res
   end
 
   def test_external_proc_called_internally_with_external_block
@@ -393,6 +440,18 @@ class EventboxCallTest < Minitest::Test
     assert_match(/with block argument .*#<Proc.* is not allowed/, err.to_s)
   end
 
+  def test_external_object_called_internally_with_plain_block
+    fc = Class.new(Eventbox) do
+      yield_call def go(€str, result)
+        €str.send_async :each_char do
+        end
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess){ fc.go("a") }
+    assert_match(/with block argument .*#<Proc.* is not allowed/, err.to_s)
+  end
+
   def test_external_proc_called_internally_with_completion_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, ext_obj, result)
@@ -404,7 +463,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = proc do |n, ext_obj, ext_obj_klass, int_obj, unused_arg|
       assert_equal IO, ext_obj.class
-      assert_equal Eventbox::WrappedObject, ext_obj_klass
+      assert_equal Eventbox::ExternalObject, ext_obj_klass
       assert_equal Eventbox::WrappedObject, int_obj.class
       assert_nil unused_arg
       [n + 1, IO.pipe[0]]
@@ -415,7 +474,7 @@ class EventboxCallTest < Minitest::Test
     assert_equal IO, ext_obj2.class
     assert_equal Eventbox::WrappedObject, ext_obj2_klass
     assert_equal IO, ext_obj.class
-    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
     assert_equal Eventbox::WrappedObject, int_obj.class
   end
 
@@ -504,7 +563,7 @@ class EventboxCallTest < Minitest::Test
     n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
     assert_equal 124, n
     assert_equal IO, ext_obj.class
-    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
     assert_equal Eventbox::WrappedObject, int_obj.class
   end
 
@@ -604,7 +663,7 @@ class EventboxCallTest < Minitest::Test
     n, ext_obj, ext_obj_klass, int_obj = pr.call(123, IO.pipe[0])
     assert_equal 124, n
     assert_equal IO, ext_obj.class
-    assert_equal Eventbox::WrappedObject, ext_obj_klass
+    assert_equal Eventbox::ExternalObject, ext_obj_klass
     assert_equal Eventbox::WrappedObject, int_obj.class
   end
 
@@ -723,6 +782,26 @@ class EventboxCallTest < Minitest::Test
     assert_equal [["a", Thread.current]], a
   end
 
+  def test_external_object_called_by_async_proc
+    eb = Class.new(Eventbox) do
+      yield_call def go(€str, result)
+        start_response(async_proc do
+          €str.send_async(:concat, "b", proc do |str2|
+            result.yield str2
+          end)
+        end)
+      end
+
+      action def start_response(pr)
+        pr.yield
+      end
+    end.new
+
+    a = "a"
+    assert_equal "ab", eb.go(a)
+    assert_equal "ab", a
+  end
+
   def test_external_block_defined_by_yield_proc_and_called_by_async_proc
     eb = Class.new(Eventbox) do
       sync_call def go
@@ -805,6 +884,18 @@ class EventboxCallTest < Minitest::Test
     assert_match(/closure can't be called through method `value'/, err.to_s)
   end
 
+  def test_external_object_called_after_yield_result
+    eb = Class.new(Eventbox) do
+      yield_call def value(€str, result)
+        result.yield
+        €str.send_async(:to_i)
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess) { eb.value("4") }
+    assert_match(/method `to_i' can't be called through method `value'/, err.to_s)
+  end
+
   def test_external_block_called_after_raise_result
     eb = Class.new(Eventbox) do
       sync_call def raising_proc
@@ -817,6 +908,20 @@ class EventboxCallTest < Minitest::Test
 
     err = assert_raises(Eventbox::InvalidAccess) { eb.raising_proc.call{} }
     assert_match(/closure can't be called through .*call_test\.rb/, err.to_s)
+  end
+
+  def test_external_object_called_after_raise_result
+    eb = Class.new(Eventbox) do
+      sync_call def raising_proc
+        yield_proc do |€str, result|
+          result.raise
+          €str.send_async(:to_i)
+        end
+      end
+    end.new
+
+    err = assert_raises(Eventbox::InvalidAccess) { eb.raising_proc.call("4") }
+    assert_match(/method `to_i' can't be called through .*call_test\.rb/, err.to_s)
   end
 
   def test_external_async_call_with_deferred_callback
@@ -1077,7 +1182,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     objs = eb1.new.go(eb2, IO.pipe[0]) {}
-    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::WrappedObject, Eventbox::CompletionProc, Eventbox::WrappedObject, Eventbox::ExternalProc, Eventbox::ExternalProc], objs
+    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::ExternalObject, Eventbox::CompletionProc, Eventbox::ExternalObject, Eventbox::ExternalProc, Eventbox::ExternalProc], objs
   end
 
   def test_inter_eventbox_sync_call_return
@@ -1094,7 +1199,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     objs = eb1.new.go1(eb2, IO.pipe[0]) {}
-    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::WrappedObject, Eventbox::WrappedObject, Eventbox::ExternalProc, IO, Proc], objs
+    assert_equal [Eventbox::SyncProc, String, Symbol, Eventbox::ExternalObject, Eventbox::ExternalObject, Eventbox::ExternalProc, IO, Proc], objs
   end
 
 
@@ -1128,11 +1233,11 @@ class EventboxCallTest < Minitest::Test
     check = proc do |res|
       assert_equal 7, res.size
       assert_equal Symbol, res[0]
-      assert_equal Eventbox::WrappedObject, res[1]
-      assert_equal Eventbox::WrappedObject, res[2]
-      assert_equal Eventbox::WrappedObject, res[3]
+      assert_equal Eventbox::ExternalObject, res[1]
+      assert_equal Eventbox::ExternalObject, res[2]
+      assert_equal Eventbox::ExternalObject, res[3]
       assert_equal Symbol, res[4]
-      assert_equal Eventbox::WrappedObject, res[5]
+      assert_equal Eventbox::ExternalObject, res[5]
       if bl.empty?
         assert_equal NilClass, res[6]
       else
@@ -1148,9 +1253,9 @@ class EventboxCallTest < Minitest::Test
     check = proc do |res|
       assert_equal 5, res.size
       assert_equal Symbol, res[0]
-      assert_equal Eventbox::WrappedObject, res[1]
+      assert_equal Eventbox::ExternalObject, res[1]
       assert_equal Symbol, res[2]
-      assert_equal Eventbox::WrappedObject, res[3]
+      assert_equal Eventbox::ExternalObject, res[3]
       if bl.empty?
         assert_equal NilClass, res[4]
       else
@@ -1195,11 +1300,11 @@ class EventboxCallTest < Minitest::Test
       assert_equal 8, res.size
       assert_equal Symbol, res[0]
       assert_equal ":O1", res[1]
-      assert_equal Eventbox::WrappedObject, res[2]
+      assert_equal Eventbox::ExternalObject, res[2]
       assert_match(/@object=:O2 @name=:€b/, res[3])
       assert_equal Symbol, res[4]
       assert_equal Symbol, res[5]
-      assert_equal Eventbox::WrappedObject, res[6]
+      assert_equal Eventbox::ExternalObject, res[6]
       assert_match(/@object=:O3 @name=:€c/, res[7])
     end
     eval_code(eb, check, args, code)
@@ -1214,7 +1319,7 @@ class EventboxCallTest < Minitest::Test
       assert_equal ":A", res[1]
       assert_equal Symbol, res[2]
       assert_equal ":B", res[3]
-      assert_equal Eventbox::WrappedObject, res[4]
+      assert_equal Eventbox::ExternalObject, res[4]
       assert_match(/@object=:O3 @name=:€c/, res[5])
     end
     eval_code(eb, check, args, code)
@@ -1253,16 +1358,16 @@ class EventboxCallTest < Minitest::Test
     args = [€a: :A, b: :B, €c: :C, d: :D, g: :G, h: :H]
     check = proc do |res|
       assert_equal 10, res.size
-      assert_equal Eventbox::WrappedObject, res[0]
+      assert_equal Eventbox::ExternalObject, res[0]
       assert_match(/@object=:A @name=:€a/, res[1])
       assert_equal Symbol, res[2]
       assert_equal ":B", res[3]
-      assert_equal Eventbox::WrappedObject, res[4]
+      assert_equal Eventbox::ExternalObject, res[4]
       assert_match(/@object=:C @name=:€c/, res[5])
       assert_equal Symbol, res[6]
       assert_equal ":D", res[7]
-      assert_equal [:g, Eventbox::WrappedObject], res[8]
-      assert_equal [:h, Eventbox::WrappedObject], res[9]
+      assert_equal [:g, Eventbox::ExternalObject], res[8]
+      assert_equal [:h, Eventbox::ExternalObject], res[9]
     end
     eval_code(eb, check, args, code)
   end
@@ -1272,7 +1377,7 @@ class EventboxCallTest < Minitest::Test
     args = [€a: :A1, d: :D1]
     check = proc do |res|
       assert_equal 8, res.size
-      assert_equal Eventbox::WrappedObject, res[0]
+      assert_equal Eventbox::ExternalObject, res[0]
       assert_match(/@object=:A1 @name=:€a/, res[1])
       assert_equal Symbol, res[2]
       assert_equal ":b", res[3]
@@ -1317,7 +1422,7 @@ class EventboxCallTest < Minitest::Test
     args = [:A, :B, g: :G, h: :H]
     check = proc do |res|
       assert_equal 6, res.size
-      assert_equal Eventbox::WrappedObject, res[0]
+      assert_equal Eventbox::ExternalObject, res[0]
       assert_match(/@object=:A @name=:€a/, res[1])
       assert_equal Symbol, res[2]
       assert_equal ":B", res[3]
