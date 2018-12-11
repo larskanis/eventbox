@@ -62,7 +62,7 @@ class ParallelDownloads < Eventbox.with_options(threadpool: Eventbox::ThreadPool
   # Called for each finished download
   private async_call def download_finished(url, res)
     @downloads[url] = res             # Store the download result in the result hash
-    @progress&.yield(@downloads.size) # Notify the caller about our progress
+    @progress&.yield_async(@downloads.size) # Notify the caller about our progress
     if @downloads.size == @urls.size  # All downloads finished?
       @finished.yield                 # Finish ParallelDownloads.new
     end

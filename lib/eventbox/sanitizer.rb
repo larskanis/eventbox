@@ -379,6 +379,18 @@ class Eventbox
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
     end
+
+    alias call_async call
+    alias yield_async yield
+
+    def self.deprectate(name, repl)
+      define_method(name) do |*args, &block|
+        warn "#{caller[0]}: please use `#{repl}' instead of `#{name}' to call external procs"
+        send(repl, *args, &block)
+      end
+    end
+    deprectate :call, :call_async
+    deprectate :yield, :yield_async
   end
 
   # @private

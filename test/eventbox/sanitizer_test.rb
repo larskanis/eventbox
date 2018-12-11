@@ -262,4 +262,17 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal Eventbox::ExternalObject, okl
     assert_equal ["abc"], obj.values
   end
+
+  def test_warning_about_call_without_async
+    eb = Class.new(Eventbox) do
+      sync_call def c(&obj)
+        obj.call
+      end
+      sync_call def y(&obj)
+        obj.yield
+      end
+    end.new
+    assert_output("", /sanitizer_test.rb:.*use `yield_async' instead of `yield'/) { eb.y{} }
+    assert_output("", /sanitizer_test.rb:.*use `call_async' instead of `call'/) { eb.c{} }
+  end
 end
