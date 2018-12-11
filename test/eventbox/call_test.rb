@@ -578,7 +578,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = fc.pr
     err = assert_raises(Eventbox::InvalidAccess){ pr.call { } }
-    assert_match(/closure was yielded by `Eventbox::AsyncProc'/, err.to_s)
+    assert_match(/closure was called by `Eventbox::AsyncProc'/, err.to_s)
   end
 
   def test_sync_proc_called_externally_with_completion_block
@@ -738,7 +738,7 @@ class EventboxCallTest < Minitest::Test
     end.new { }
 
     err = assert_raises(Eventbox::InvalidAccess){ fc.go }
-    assert_match(/closure defined by `init' was yielded by `go'/, err.to_s)
+    assert_match(/closure defined by `init' was called by `go'/, err.to_s)
   end
 
   def test_external_block_called_by_async_call
@@ -868,7 +868,7 @@ class EventboxCallTest < Minitest::Test
     eb = ec.new {}
     with_report_on_exception(false) do
       err = assert_raises(Eventbox::InvalidAccess) { eb.go1 }
-      assert_match(/closure defined by `init' was yielded by .* after .* returned/, err.to_s)
+      assert_match(/closure defined by `init' was called by .* after .* returned/, err.to_s)
     end
   end
 

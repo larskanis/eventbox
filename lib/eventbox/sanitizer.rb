@@ -239,7 +239,7 @@ class Eventbox
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
             end
             cbblock = args.pop if Proc === args.last
-            target_event_loop._external_proc_call(arg, name, args, block, cbblock, source_event_loop, creation_answer_queue)
+            target_event_loop._external_object_call(arg, :call, name, args, block, cbblock, source_event_loop, creation_answer_queue)
           else
             # called externally
             raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"

@@ -294,13 +294,6 @@ class Eventbox
       loop do
         rets = answer_queue.deq
         case rets
-        when ExternalProcCall
-          cbres = rets.block.yield(*rets.args, &rets.arg_block)
-
-          if rets.cbresult
-            cbres = Sanitizer.sanitize_value(cbres, source_event_loop, self)
-            external_proc_result(rets.cbresult, cbres)
-          end
         when ExternalObjectCall
           cbres = rets.object.send(rets.method, *rets.args, &rets.arg_block)
 
@@ -323,17 +316,11 @@ class Eventbox
       unless answer_queue.empty?
         rets = answer_queue.deq
         case rets
-        when ExternalProcCall
-          if Proc === name
-            raise InvalidAccess, "closure can't be called through #{name.inspect}, since it already returned"
-          else
-            raise InvalidAccess, "closure can't be called through method `#{name}', since it already returned"
-          end
         when ExternalObjectCall
           if Proc === name
-            raise InvalidAccess, "method `#{rets.method}' can't be called through #{name.inspect}, since it already returned"
+            raise InvalidAccess, "#{rets.objtype} can't be called through #{name.inspect}, since it already returned"
           else
-            raise InvalidAccess, "method `#{rets.method}' can't be called through method `#{name}', since it already returned"
+            raise InvalidAccess, "#{rets.objtype} can't be called through method `#{name}', since it already returned"
           end
         else
           if Proc === name
@@ -362,30 +349,15 @@ class Eventbox
       end
     end
 
-    ExternalProcCall = Struct.new :block, :args, :arg_block, :cbresult
-
-    def _external_proc_call(block, name, args, arg_block, cbresult, source_event_loop, creation_answer_queue)
-      args = Sanitizer.sanitize_values(args, self, source_event_loop)
-      arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
-      cb = ExternalProcCall.new(block, args, arg_block, cbresult)
-
-      if @latest_answer_queue
-        # proc called by a sync or yield call/proc context
-        @latest_answer_queue << cb
-      elsif creation_answer_queue
-        # proc called by a async call/proc context, but defined by a yield_call
-        if creation_answer_queue.closed?
-          raise InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by a 'async' method/proc after the defining method/proc returned - either change the yielding context from 'async' to a 'sync' or 'yield' or yield the value before the defining context returns"
-        end
-        creation_answer_queue << cb
-      else
-        raise InvalidAccess, "closure #{"defined by `#{name}' " if name}was yielded by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc"
+    class ExternalObjectCall < Struct.new :object, :method, :args, :arg_block, :cbresult
+      def proc?
+        Proc === object
       end
 
-      nil
+      def objtype
+        proc? ? "closure" : "method `#{method}'"
+      end
     end
-
-    ExternalObjectCall = Struct.new :object, :method, :args, :arg_block, :cbresult
 
     def _external_object_call(object, method, name, args, arg_block, cbresult, source_event_loop, creation_answer_queue)
       args = Sanitizer.sanitize_values(args, self, source_event_loop)
@@ -398,11 +370,11 @@ class Eventbox
       elsif creation_answer_queue
         # proc called by a async call/proc context, but defined by a yield_call
         if creation_answer_queue.closed?
-          raise InvalidAccess, "method `#{method}' #{"defined by `#{name}' " if name}was called by a 'async' method/proc after the defining method/proc returned - either change the yielding context from 'async' to a 'sync' or 'yield' or yield the value before the defining context returns"
+          raise InvalidAccess, "#{cb.objtype} #{"defined by `#{name}' " if name}was called by a 'async' method/proc after the defining method/proc returned - either change the yielding context from 'async' to a 'sync' or 'yield' or yield the value before the defining context returns"
         end
         creation_answer_queue << cb
       else
-        raise InvalidAccess, "method `#{method}' #{"defined by `#{name}' " if name}was called by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc"
+        raise InvalidAccess, "#{cb.objtype} #{"defined by `#{name}' " if name}was called by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc"
       end
 
       nil
