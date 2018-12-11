@@ -265,6 +265,7 @@ class Eventbox
   # Access to the object from a different scope is denied, but the wrapper object can be stored and passed back to the origin scope to unwrap it.
   class WrappedObject
     attr_reader :name
+    # @private
     def initialize(object, event_loop, name=nil)
       @object = object
       @event_loop = event_loop
@@ -272,6 +273,7 @@ class Eventbox
       @dont_marshal = ExternalSharedObject # protect self from being marshaled
     end
 
+    # @private
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
     end
@@ -281,13 +283,46 @@ class Eventbox
     end
   end
 
+  # Wrapper for objects created external or in the action scope of some Eventbox instance.
+  #
+  # External objects can be called from event scope by {ExternalObject#send_async}.
+  #
+  # External objects can also be passed to action or to external scope.
+  # In this case a {ExternalObject} is unwrapped back to the ordinary object.
+  #
+  # @see ExternalProc
   class ExternalObject < WrappedObject
+    # @private
     def initialize(object, event_loop, target_event_loop, creation_answer_queue, name=nil)
       super(object, event_loop, name)
       @target_event_loop = target_event_loop
       @creation_answer_queue = creation_answer_queue
     end
 
+    # Invoke the external objects within the event scope.
+    #
+    # It can be called within {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
+    # The method then runs in the background on the thread that called the event scope method in execution.
+    #
+    # It's also possible to invoke it within a {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
+    # In this case the method runs in the background on the thread that is waiting for the yield call to return.
+    #
+    # If the call to the external object doesn't return immediately, it blocks the calling thread.
+    # If this is not desired, an {Eventbox.action action} can be used instead, to invoke the method.
+    # However in any case calling the external object doesn't block the Eventbox instance itself.
+    # It still keeps responsive to calls from other threads.
+    #
+    # Optionally a proc can be provided as the last argument which acts as a completion callback.
+    # This proc is invoked, when the call has finished, with the result value as argument.
+    #
+    #   class Sender < Eventbox
+    #     sync_call def init(€obj)
+    #       # invoke the object given to Sender.new
+    #       # and when completed, print the result of strip
+    #       €obj.send_async :strip, ->(res){ p res }
+    #     end
+    #   end
+    #   Sender.new(" a b c ")    # Output: "a b c"
     def send_async(method, *args, &block)
       if @target_event_loop&.event_scope?
         # called in the event scope
@@ -349,33 +384,42 @@ class Eventbox
     end
   end
 
-  # Wrapper for Proc objects created external of some Eventbox instance.
+  # Wrapper for Proc objects created external or in the action scope of some Eventbox instance.
   #
-  # External Proc objects can be invoked from event scope through {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
-  # It's also possible to invoke it through {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external proc into the event scope, is a yield call that didn't return yet.
+  # External Proc objects can be invoked from event scope by {ExternalProc#call_async}.
+  # It can be called within {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
+  # The proc then runs in the background on the thread that called the event scope method in execution.
+  #
+  # It's also possible to invoke it within a {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external proc into the event scope, is a yield call that didn't return yet.
+  # In this case the proc runs in the background on the thread that is waiting for the yield call to return.
   #
   # Optionally a proc can be provided as the last argument which acts as a completion callback.
   # This proc is invoked, when the call has finished, with the result value as argument.
   #
   #   class Callback < Eventbox
   #     sync_call def init(&block)
-  #       block.call(5, proc do |res|  # invoke the block given to Callback.new
-  #         p res                      # print the block result (5 + 1)
-  #       end)
+  #       # invoke the block given to Callback.new
+  #       # and when completed, print the result of the block
+  #       block.call_async 5, ->(res){ p res }
   #     end
   #   end
   #   Callback.new {|num| num + 1 }    # Output: 6
   #
   # External Proc objects can also be passed to action or to external scope.
-  # In this case a {ExternalProc} is unwrapped back to an ordinary Proc object.
+  # In this case a {ExternalProc} is unwrapped back to the ordinary Proc object.
+  #
+  # @see ExternalObject
   class ExternalProc < WrappedProc
+    # @private
     attr_reader :name
+    # @private
     def initialize(object, event_loop, name=nil)
       @object = object
       @event_loop = event_loop
       @name = name
     end
 
+    # @private
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
     end
@@ -383,6 +427,7 @@ class Eventbox
     alias call_async call
     alias yield_async yield
 
+    # @private
     def self.deprectate(name, repl)
       define_method(name) do |*args, &block|
         warn "#{caller[0]}: please use `#{repl}' instead of `#{name}' to call external procs"
