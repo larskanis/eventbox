@@ -84,7 +84,7 @@ It has semantics like ruby's builtin Queue implementation:
 q = Queue.new
 Thread.new do
   5.times do |i|
-    q.enq i      # Enqueue integers 0 to 5
+    q.enq i      # Enqueue integers 0 to 4
   end
 end
 
