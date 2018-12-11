@@ -357,7 +357,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new
 
-    assert_nil fc.go("a")
+    assert_nil fc.go("a".dup)
   end
 
   def test_external_proc_called_internally_without_completion_block
@@ -380,7 +380,7 @@ class EventboxCallTest < Minitest::Test
       end
     end
 
-    a = "a"
+    a = "a".dup
     fc.new(a)
     assert_equal "ab", a
   end
@@ -797,7 +797,7 @@ class EventboxCallTest < Minitest::Test
       end
     end.new
 
-    a = "a"
+    a = "a".dup
     assert_equal "ab", eb.go(a)
     assert_equal "ab", a
   end
