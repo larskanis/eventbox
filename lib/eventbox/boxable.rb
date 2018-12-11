@@ -36,7 +36,7 @@ class Eventbox
     #
     # The created method can be safely called from any thread.
     # All method arguments are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
+    # Arguments prefixed by a +€+ sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
@@ -70,7 +70,7 @@ class Eventbox
     # Blocks are executed by the same thread that calls the {sync_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
+    # Arguments prefixed by a +€+ sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
@@ -106,7 +106,7 @@ class Eventbox
     # Blocks are executed by the same thread that calls the {yield_call} method to that time.
     #
     # All method arguments as well as the result value are passed through the {Sanitizer}.
-    # Arguments prefixed by a € sign are automatically passed as {Eventbox::ExternalObject}.
+    # Arguments prefixed by a +€+ sign are automatically passed as {Eventbox::ExternalObject}.
     #
     # The method itself as well as the Proc object might not do any blocking calls or expensive computations - this would impair responsiveness of the {Eventbox} instance.
     # Instead use {action} in these cases.
@@ -145,7 +145,7 @@ class Eventbox
     #
     # Attention: Be careful with read-modify-write operations - they are *not* atomic but are executed as two independent operations.
     #
-    # This will lose counter increments, since `counter` is incremented in a non-atomic manner:
+    # This will lose counter increments, since +counter+ is incremented in a non-atomic manner:
     #   attr_accessor :counter
     #   async_call def start
     #     10.times { do_something }
@@ -192,7 +192,7 @@ class Eventbox
     #     str              # => "value1"
     #     action.current?  # => true
     #     # `action' can be passed to event scope or external scope,
-    #     # in order to send a signals per Action#raise
+    #     # in order to send a signal per Action#raise
     #   end
     #
     def action(name, &block)
@@ -219,7 +219,7 @@ class Eventbox
 
   # An Action object is thin wrapper for a Ruby thread.
   #
-  # It is returned by {Eventbox#action} and optionally passed as last argument to action methods.
+  # It is returned by {Eventbox::Boxable#action action methods} and optionally passed as last argument to action methods.
   # It can be used to interrupt the program execution by an exception.
   #
   # However in contrast to ruby's builtin threads, any interruption must be explicit allowed.
@@ -228,7 +228,7 @@ class Eventbox
   # It is raised by {Eventbox#shutdown!} and is delivered as soon as a blocking operation is executed.
   #
   # An Action object can be used to stop the action while blocking operations.
-  # It should be made sure, that the `rescue` statement is outside of the block to `handle_interrupt`.
+  # It should be made sure, that the +rescue+ statement is outside of the block to +handle_interrupt+.
   # Otherwise it could happen, that the rescuing code is interrupted by the signal.
   # Sending custom signals to an action works like:
   #
@@ -266,8 +266,8 @@ class Eventbox
     #
     # This method does nothing if the action is already finished.
     #
-    # If {raise} is called within the action (#current? returns `true`), all exceptions are delivered immediately.
-    # This happens regardless of the current interrupt mask set by `Thread.handle_interrupt`.
+    # If {raise} is called within the action ({#current?} returns +true+), all exceptions are delivered immediately.
+    # This happens regardless of the current interrupt mask set by +Thread.handle_interrupt+.
     def raise(*args)
       # ignore raise, if sent from the action thread
       if AbortAction === args[0] || (Module === args[0] && args[0].ancestors.include?(AbortAction))

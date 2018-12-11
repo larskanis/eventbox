@@ -18,7 +18,7 @@ class Eventbox
   #
   # In detail this works as following.
   # Objects which are passed through unchanged are:
-  # * {Eventbox}, {Eventbox::Action} and `Module` objects
+  # * {Eventbox}, {Eventbox::Action} and +Module+ objects
   # * Proc objects created by {Eventbox#async_proc}, {Eventbox#sync_proc} and {Eventbox#yield_proc}
   #
   # The following rules apply for wrapping/unwrapping:
@@ -27,8 +27,8 @@ class Eventbox
   # Both cases even work if the object is encapsulated by another object.
   #
   # In all other cases the following rules apply:
-  # * If the object is marshalable, it is passed as a deep copy through `Marshal.dump` and `Marshal.load` .
-  # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized recursively.
+  # * If the object is marshalable, it is passed as a deep copy through +Marshal.dump+ and +Marshal.load+ .
+  # * An object which failed to marshal as a whole is tried to be dissected and values are sanitized separately and recursively.
   # * If the object can't be marshaled or dissected, it is wrapped as {ExternalObject} when passed from external scope to event scope and wrapped as {WrappedObject} when passed from the event scope.
   #   They are unwrapped when passed back to origin scope.
   # * Proc objects passed from event scope to external are wrapped as {WrappedObject}.
@@ -387,7 +387,7 @@ class Eventbox
     #   end
     #   MyBox.new   # => raises RuntimeError (raise from action MyBox#process)
     #
-    # In contrast to a direct call of `Kernel.raise`, calling this method doesn't abort the current context.
+    # In contrast to a direct call of +Kernel.raise+, calling this method doesn't abort the current context.
     # Instead when in the event scope, raising the exception is deferred until returning to the calling external or action scope.
     def raise(*args)
       self.call(WrappedException.new(args))
