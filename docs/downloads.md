@@ -1,8 +1,8 @@
-### Use Eventbox to download URLs concurrently
+## Use Eventbox to download URLs concurrently
 
 The following example illustrates how to use actions in order to download a list of URLs in parallel.
 
-At first the `init` method starts an action for each URL to be downloaded, initializes some variables and stores the `result` object for later use.
+At first the {Eventbox#init init} method starts an action for each URL to be downloaded, initializes some variables and stores the `result` object for later use.
 Since the `result` is not yielded in the method body, the external call to `ParallelDownloads.new` doesn't return to that point in time.
 Instead it's suspended until `result` is yielded later on, when all URLs have been retrieved.
 

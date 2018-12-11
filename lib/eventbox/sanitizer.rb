@@ -301,14 +301,14 @@ class Eventbox
 
     # Invoke the external objects within the event scope.
     #
-    # It can be called within {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
+    # It can be called within {Eventbox::Boxable#sync_call sync_call} and {Eventbox::Boxable#yield_call yield_call} methods and from {Eventbox#sync_proc} and {Eventbox#yield_proc} closures.
     # The method then runs in the background on the thread that called the event scope method in execution.
     #
-    # It's also possible to invoke it within a {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
+    # It's also possible to invoke it within a {Eventbox::Boxable#async_call async_call} or {Eventbox#async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
     # In this case the method runs in the background on the thread that is waiting for the yield call to return.
     #
     # If the call to the external object doesn't return immediately, it blocks the calling thread.
-    # If this is not desired, an {Eventbox.action action} can be used instead, to invoke the method.
+    # If this is not desired, an {Eventbox::Boxable#action action} can be used instead, to invoke the method.
     # However in any case calling the external object doesn't block the Eventbox instance itself.
     # It still keeps responsive to calls from other threads.
     #
@@ -316,7 +316,7 @@ class Eventbox
     # This proc is invoked, when the call has finished, with the result value as argument.
     #
     #   class Sender < Eventbox
-    #     sync_call def init(€obj)
+    #     sync_call def init(€obj)  # €-variables are passed as reference instead of copy
     #       # invoke the object given to Sender.new
     #       # and when completed, print the result of strip
     #       €obj.send_async :strip, ->(res){ p res }
@@ -360,9 +360,19 @@ class Eventbox
 
   WrappedException = Struct.new(:exc)
 
-  # Proc object provided as the last argument of {Eventbox.yield_call} and {Eventbox#yield_proc}.
+  # Proc object provided as the last argument of {Eventbox::Boxable#yield_call yield_call} and {Eventbox#yield_proc}.
+  #
+  # Used to let the corresponding yield call return a value:
+  #   class MyBox < Eventbox
+  #     yield_call def number(result)
+  #       result.yield 42
+  #     end
+  #   end
+  #   MyBox.new.number   # => 42
+  #
+  # Alternatively the yield call can respond with an exception by {CompletionProc#raise}.
   class CompletionProc < AsyncProc
-    # Raise an exception in the context of the waiting {Eventbox.yield_call} or {Eventbox#yield_proc} method.
+    # Raise an exception in the context of the waiting {Eventbox::Boxable#yield_call yield_call} or {Eventbox#yield_proc} method.
     #
     # This allows to raise an exception to the calling scope from external or action scope:
     #
@@ -387,10 +397,10 @@ class Eventbox
   # Wrapper for Proc objects created external or in the action scope of some Eventbox instance.
   #
   # External Proc objects can be invoked from event scope by {ExternalProc#call_async}.
-  # It can be called within {Eventbox.sync_call} and {Eventbox.yield_call} methods and from {Eventbox.sync_proc} and {Eventbox.yield_proc} closures.
+  # It can be called within {Eventbox::Boxable#sync_call sync_call} and {Eventbox::Boxable#yield_call yield_call} methods and from {Eventbox#sync_proc} and {Eventbox#yield_proc} closures.
   # The proc then runs in the background on the thread that called the event scope method in execution.
   #
-  # It's also possible to invoke it within a {Eventbox.async_call} or {Eventbox.async_proc}, when the method or proc that brought the external proc into the event scope, is a yield call that didn't return yet.
+  # It's also possible to invoke it within a {Eventbox::Boxable#async_call async_call} or {Eventbox#async_proc}, when the method or proc that brought the external proc into the event scope, is a yield call that didn't return yet.
   # In this case the proc runs in the background on the thread that is waiting for the yield call to return.
   #
   # Optionally a proc can be provided as the last argument which acts as a completion callback.

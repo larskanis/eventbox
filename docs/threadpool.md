@@ -1,9 +1,12 @@
+## A thread-pool implementation making use of Eventbox
+
 The following class implements a thread-pool with a fixed number of threads to be borrowed by the `pool` method.
-It shows how the action method `start_pool_thread` makes use of the private yield_call `next_job` to query, wait for and retrieve an object from the event scope.
+It shows how the action method `start_pool_thread` makes use of the private {Eventbox.yield_call yield_call} `next_job` to query, wait for and retrieve an object from the event scope.
 
 This kind of object is the block that is given to `pool`.
 Although all closures (blocks, procs and lambdas) are wrapped in a way that allows safe calls from the event scope, it is just passed through to the action scope and retrieved as the result value of `next_job`.
 When this happens, the wrapping is automatically removed, so that the pure block given to `pool` is called in `start_pool_thread`.
+That way each action thread runs one block at the same time, but all started action threads process the blocks concurrently.
 
 ```ruby
 class ThreadPool < Eventbox
