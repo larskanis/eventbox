@@ -97,6 +97,7 @@ The order depends on the particular response time of the URL.
 Since Eventbox protects from data races, it's insignificant in which order events are emitted by an event scope method and whether objects are changed after being sent.
 It's therefore OK to set `@downloads` both before or after starting the action threads per `start_download` in `init`.
 
+<a name="exceptions-closure-style"></a>
 ### Change to closure style
 
 There is another alternative way to transmit the result of an action to the event scope.

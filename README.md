@@ -11,7 +11,9 @@ Code inside an {Eventbox} object is executed non-concurrently and hence shouldn'
 This is similar to the typical JavaScript programming style.
 
 On the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Communication between actions and event processing is done through ordinary method or lambda calls.
+Communication between actions, event processing and external environment is done through ordinary method calls.
+Equally all kind of lambda functions can be used.
+They all translate between blocking versus event based scheme and ensure thread-safety.
 
 An important task of Eventbox is to avoid race conditions through shared data.
 Such data races between event scope and external/action scope are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
@@ -61,10 +63,10 @@ class Queue < Eventbox
   end
 
   # Push a value to the queue and return the next value by the next waiting deq call
-  async_call def enq(€value)  # €-variables are passed through as reference
+  async_call def enq(€value)  # €-variables are passed through as reference instead of copies
     @que << €value            # Push a value to the queue
-    if w=@waiting.shift
-      w.yield @que.shift      # Let one waiting deq call return with the next value from the queue
+    if w=@waiting.shift       # Is there a thread already waiting for a value?
+      w.yield @que.shift      # Let one waiting `deq' call return with the next value from the queue
     end
   end
 
@@ -109,8 +111,8 @@ The external call returns immediately, but can't return a value.
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
 The branch in `Queue#deq` shows a typical decision taking in Eventbox:
-If the call can be processed immediately it yields the result, else wise the result is added to a list to be processes later.
-It's important to check this list at each event which could signal the ability to complete the enqueued processing.
+If the call can be processed immediately it yields the result, else wise the result is added to an internal list to be processes later.
+This list must be checked at each event which could signal the ability to complete the enqueued processing.
 This is done in `Queue#enq` in the above example.
 
 If you just need a queue it's better to stay at the Queue implementations of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
@@ -208,6 +210,7 @@ Instead the event scope method is executed until its end, while the block is exe
 Optionally the block can be called with a completion block as the last argument, which is called with the result of the external proc when it has finished.
 
 
+<a name="exceptions"></a>
 ## Exceptions
 
 Eventbox makes use of exceptions in several ways.
@@ -236,6 +239,9 @@ async_call def conn_failed(error)
   # handle the failure event (retry or similar)
 end
 ```
+
+Alternatively closures can be passed to the action which are called in case of success or failure.
+See the {file:docs/downloads.md#exceptions-closure-style download example} for more description about this variation.
 
 Another use of exceptions is for sending signals to running actions.
 This is done by {Eventbox::Action#raise}.
@@ -314,13 +320,13 @@ This was the primary motivation to develop this library.
 Eventbox is kind of advancement of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
 While the actor model uses explicit message passing, Eventbox relies on method calls, closure calls and exceptions, which makes it much more natural to use.
 Unlike an actor, Eventbox doesn't start a thread per object, but uses the thread of the caller to execute non-blocking code.
-This makes instantiation of Eventbox objects cheeper than Actor objects.
+This makes instantiation of Eventbox objects cheaper than Actor objects.
 Instead it can create and manage in-object private threads in form of {Eventbox.action actions} to be used for blocking operations.
 
 Many actor implementations manage an inheritance tree of actor objects.
 Parent actors are then notified about failures of child actors.
 In contrast Eventbox objects maintain a list of all running internal actions instead, but are completely independent from each other.
-Failures are handled object internal - see chapter "Exceptions" above.
+Failures are handled object internal - see chapter [Exceptions](#exceptions) above.
 
 ### Internal state
 
