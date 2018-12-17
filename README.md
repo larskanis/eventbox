@@ -80,7 +80,21 @@ class Queue < Eventbox
   end
 end
 ```
-It has semantics like ruby's builtin Queue implementation:
+
+Although there are no mutex or condition variables in use, the implementation is guaranteed to be thread-safe.
+The key feature is the {Eventbox.yield_call} method definition.
+It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
+In contrast {Eventbox.async_call} defines a method which handles one event only - the start of the call.
+The external call returns immediately, but can't return a value.
+
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+
+The branch in `Queue#deq` shows a typical decision taking in Eventbox:
+If the call can be processed immediately it yields the result, else wise the result is added to an internal list to be processes later.
+This list must be checked at each event which could signal the ability to complete the enqueued processing.
+This is done in `Queue#enq` in the above example.
+
+Our new queue class unsurprisingly has semantics like ruby's builtin Queue implementation:
 
 ```ruby
 q = Queue.new
@@ -101,19 +115,6 @@ end
 3
 4
 ```
-
-Although there are no mutex or condition variables in use, the implementation is guaranteed to be thread-safe.
-The key feature is the {Eventbox.yield_call} method definition.
-It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
-In contrast {Eventbox.async_call} defines a method which handles one event only - the start of the call.
-The external call returns immediately, but can't return a value.
-
-Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
-
-The branch in `Queue#deq` shows a typical decision taking in Eventbox:
-If the call can be processed immediately it yields the result, else wise the result is added to an internal list to be processes later.
-This list must be checked at each event which could signal the ability to complete the enqueued processing.
-This is done in `Queue#enq` in the above example.
 
 If you just need a queue it's better to stay at the Queue implementations of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
 However if you want to cancel items in the queue for example, you need more control about waiting items or waiting callers than common thread abstractions offer.
