@@ -55,14 +55,14 @@ It can therefore be used to build well known multithread abstractions like a Que
 
 ```ruby
 require "eventbox"
-class Queue < Eventbox
+class MyQueue < Eventbox
   # Called at Queue.new just like Object#initialize in ordinary ruby classes
   async_call def init
     @que = []       # List of values waiting for being fetched by deq
     @waiting = []   # List of blocking deq calls waiting for new values to be pushed by enq
   end
 
-  # Push a value to the queue and return the next value by the next waiting deq call
+  # Push a value to the queue - async methods always return immediately
   async_call def enq(€value)  # €-variables are passed through as reference instead of copies
     @que << €value            # Push the value to the queue
     if w=@waiting.shift       # Is there a thread already waiting for a value?
@@ -71,6 +71,7 @@ class Queue < Eventbox
   end
 
   # Fetch a value from the queue or suspend the caller until a value has been enqueued
+  # yield methods are completely processed, but return not before a result has been yielded
   yield_call def deq(result)
     if @que.empty?
       @waiting << result      # Don't return a value now, but enqueue the request as waiting
@@ -81,11 +82,10 @@ class Queue < Eventbox
 end
 ```
 
-Although there are no mutex or condition variables in use, the implementation is guaranteed to be thread-safe.
-The key feature is the {Eventbox.yield_call} method definition.
-It divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
-In contrast {Eventbox.async_call} defines a method which handles one event only - the start of the call.
-The external call returns immediately, but can't return a value.
+Although there are no mutex or condition variables in use, the implementation is thread-safe.
+This is due to the wrapping that is activated by {Eventbox::Boxable.async_call async_call} and {Eventbox::Boxable.yield_call yield_call} prefixes.
+The {Eventbox::Boxable.yield_call yield_call} method definition divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
+In contrast {Eventbox::Boxable.async_call async_call} defines a method which handles one event only - the start of the call: The external call completes immediately and always returns `self`.
 
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
@@ -97,7 +97,7 @@ This is done in `Queue#enq` in the above example.
 Our new queue class unsurprisingly has semantics like ruby's builtin Queue implementation:
 
 ```ruby
-q = Queue.new
+q = MyQueue.new
 Thread.new do
   5.times do |i|
     q.enq i      # Enqueue integers 0 to 4
@@ -118,7 +118,7 @@ end
 
 If you just need a queue it's better to stay at the Queue implementations of the standard library or [concurrent-ruby](https://github.com/ruby-concurrency/concurrent-ruby).
 However if you want to cancel items in the queue for example, you need more control about waiting items or waiting callers than common thread abstractions offer.
-The same if you want to query and visualize the internal state of processing - that means the pending items in the queue.
+The same if you want to query and visualize the internal state of processing (the pending items in the queue).
 
 
 ### Hands on
@@ -370,7 +370,7 @@ And it is written to act as a solid and consistent foundation for a wide range o
 So if your use case requires raw performance more than implementation safety, Eventbox is probably not the right tool.
 
 Still there is lots of room for performance improvements in Eventbox, like faster method invocations or copy-on-write objects.
-If there's a stronger interest in Eventbox performance, it's possible to source relevant parts out to a C extension.
+If there's a stronger interest in Eventbox performance, it's even possible to source relevant parts out to a C extension.
 The introduction of guilds in ruby will probably be helpful for Eventbox as well.
 
 
