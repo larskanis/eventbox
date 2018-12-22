@@ -133,6 +133,7 @@ It is recommended to work them through, in order to fully understand how Eventbo
 
 ## Method types
 
+<a name="event-scope"></a>
 ### Event Scope
 
 Eventbox offers 3 different types of external callable methods:
@@ -327,7 +328,7 @@ Instead it can create and manage in-object private threads in form of {Eventbox.
 Many actor implementations manage an inheritance tree of actor objects.
 Parent actors are then notified about failures of child actors.
 In contrast Eventbox objects maintain a list of all running internal actions instead, but are completely independent from each other.
-Failures are handled object internal - see chapter [Exceptions](#exceptions) above.
+Failures are handled either object internal or by the caller - see chapter [Exceptions](#exceptions) above.
 
 ### Internal state
 
@@ -349,15 +350,22 @@ Beside this, Eventbox has an explicit specification where blocking and where non
 This ensures that events are processed in time regardless of the current state.
 Such a specification is not enforced by most other threading abstractions and can quickly lead to delayed reactions in particular situations.
 
+### No global states
 
-## Comparison with other async libraries
+Eventbox doesn't manage or use any global states other than class definitions.
+Even {Eventbox.with_options configuration options} are handled on a class basis.
+This is why Eventbox can be combined with other threading abstractions and integrated in any applications without side effects.
+Vice versa Eventbox objects can easily replaced by other threading abstractions, if these fit better.
 
-Eventbox doesn't try to implement IO or other blocking operations on top of a global event loop.
+### Comparison with other async libraries
+
+Eventbox doesn't implement any own IO or other kinds of blocking operations.
 Instead it encourages the use of blocking operations and threads for things which should run in parallel, while keeping the management code in safe internal methods written in an event based style.
-Because IO is done in action threads, the only type of events handled by the event scope are method calls received from actions or external calls.
-They are processed by a kind of event loop which runs one per Eventbox object.
+Because IO is done in action threads, the only type of events handled by the event scope are method or closure calls received from actions or external.
+They are processed by a kind of local event loop which runs one per Eventbox object.
 
 This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid) which provide dozens of IO wrappers.
+Due to these differences the focus of Eventbox is on a consistent, solid and accurate core that developers can rely on.
 
 
 ## Eventbox performance
