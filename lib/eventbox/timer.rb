@@ -9,28 +9,36 @@ class Eventbox
   #     include Eventbox::Timer
   #
   #     async_call def init
-  #       super   # make sure Timer#init is called
+  #       super     # Make sure Timer#init is called
   #       timer_after(1) do
   #         puts "one second elapsed"
   #       end
   #     end
   #   end
   #
+  #   MyBox.new     # Print the message from the timer thread after 1 sec.
+  #   sleep 2       # Wait for the timer to be triggered
+  #
   # The main functions are timer_after and timer_every.
   # They schedule asynchronous calls to the given block:
-  #   timer_after(3) do
+  #   timer_after(3.0) do
   #     # executed once after 3 seconds
   #   end
   #
-  #   timer_every(3) do
-  #     # executed repeatedly every 3 seconds
+  #   timer_every(1.5) do
+  #     # executed repeatedly every 1.5 seconds
   #   end
   #
-  # Both functions return an Alarm object which can be used to cancel the alarm through timer_cancel.
+  # Both functions return an {Alarm} object which can be used to cancel the alarm through {timer_cancel}.
   #
-  # timer_after, timer_every and timer_cancel can be used within the event scope, in actions and from external scope.
+  # {Timer} always uses one {Eventbox::Boxable#action action} thread per Eventbox object, regardless of the number of scheduled timers.
+  # All alarms are called from this thread.
+  # {timer_after}, {timer_every} and {timer_cancel} can be used within the {file:README.md#event-scope event scope}, in actions and from external scope.
+  # Alarms defined within the event scope must be non-blocking, as any other code in the event scope.
+  # Alarms defined in action or external scope should also avoid blocking code, otherwise one alarm can delay the next alarm.
   #
-  # {Timer} always uses one action thread per Eventbox object, regardless of the number of scheduled timers.
+  # *Note:* Each object that includes the {Timer} module must be explicit terminated by {Eventbox#shutdown!}.
+  # It is (currently) not freed by the garbarge collector.
   module Timer
     class Reload < RuntimeError
     end
@@ -124,6 +132,8 @@ class Eventbox
     end
 
     # Cancel an alarm previously scheduled per timer_after or timer_every
+    #
+    # The method does nothing, if the alarm is no longer active.
     async_call def timer_cancel(alarm)
       a = @timer_alarms.delete(alarm)
       if a
