@@ -6,20 +6,20 @@
 _Manage multithreading with the safety of event based programming_
 
 Eventbox is a model of concurrent computation that is used to build thread-safe objects with arbitrary interfaces.
-It is kind of [advancement](#comparison-threading-abstractions) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+It is [kind of advancement](#comparison-threading-abstractions) of the well known [actor model](https://en.wikipedia.org/wiki/Actor_model) leveraging the possibilities of the ruby language.
+It is a small, consistent but powerful threading abstraction which **integrates well into existing environments**.
 
 {Eventbox} objects are event based and single threaded from the inside but thread-safe and blocking from the outside.
-Eventbox enforces a separation of code for event processing and code running blocking operations.
+Eventbox enforces a **separation of code for event processing** and code running blocking operations.
 Code inside an {Eventbox} object is executed non-concurrently and hence shouldn't do any blocking operations.
 This is similar to the typical JavaScript programming style.
 
-On the other hand all blocking operations can be executed in action threads spawned by the {Eventbox.action action} method type.
-Communication between actions, event processing and external environment is done through ordinary method calls.
-Equally various kind of lambda functions can be used.
+On the other hand all **blocking operations can be executed in action threads** spawned by the {Eventbox.action action} method type.
+Communication between actions, event processing and external environment is done through ordinary method and lambda calls.
 They arbitrate between blocking versus event based scheme and ensure thread-safety.
 
 An important task of Eventbox is to avoid race conditions through shared data.
-Such data races between event scope and external/action scope are avoided through {Eventbox::Sanitizer filters} applied to all inputs and outputs.
+Such data races between event scope and external/action scope are avoided through **{Eventbox::Sanitizer filters} applied to all inputs and outputs**.
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
 * [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master)
@@ -376,6 +376,7 @@ They are processed by a kind of local event loop which runs one per Eventbox obj
 
 This is in contrast to libraries like [async](https://github.com/socketry/async), [EventMachine](https://github.com/eventmachine/eventmachine) or [Celluloid](https://github.com/celluloid/celluloid) which provide dozens of IO wrappers.
 Due to these differences the focus of Eventbox is on a consistent, solid and accurate core that developers can rely on.
+Intentionally there is no ecosystem around Eventbox.
 
 
 ## Eventbox performance

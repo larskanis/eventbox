@@ -16,7 +16,7 @@ class Eventbox
   #     end
   #   end
   #
-  #   MyBox.new     # Print the message from the timer thread after 1 sec.
+  #   MyBox.new     # Schedule the alarm after 1 sec
   #   sleep 2       # Wait for the timer to be triggered
   #
   # The main functions are timer_after and timer_every.
