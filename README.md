@@ -87,6 +87,9 @@ This is due to the wrapping that is activated by {Eventbox::Boxable.async_call a
 The {Eventbox::Boxable.yield_call yield_call} method definition divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
 In contrast {Eventbox::Boxable.async_call async_call} defines a method which handles one event only - the start of the call: The external call completes immediately and always returns `self`.
 
+rdoc-image:images/queue_calls.svg
+![Queue calls](images/queue_calls.svg?raw=true "Queue call flow")
+
 Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
 The branch in `Queue#deq` shows a typical decision taking in Eventbox:

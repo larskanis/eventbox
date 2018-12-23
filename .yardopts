@@ -3,7 +3,7 @@
 --protected
 --private
 --no-private
---embed-mixin Eventbox::Boxable
+--asset docs/images:images
 lib/**/*.rb
 -
 docs/**/*.md
