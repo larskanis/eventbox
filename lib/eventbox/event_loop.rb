@@ -12,22 +12,40 @@ class Eventbox
 
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
+      @shutdown = false
+      @guard_time = guard_time
+      _init_variables
+    end
+
+    def marshal_dump
+      raise TypeError, "Eventbox objects can't be serialized within event scope" if event_scope?
+      @mutex.synchronize do
+        raise TypeError, "Eventbox objects can't be serialized while actions are running" unless @running_actions.empty?
+        [@threadpool, @shutdown, @guard_time]
+      end
+    end
+
+    def marshal_load(array)
+      @threadpool, @shutdown, @guard_time = array
+      _init_variables
+    end
+
+    def _init_variables
       @running_actions = []
       @running_actions_for_gc = []
       @mutex = Mutex.new
-      @shutdown = false
-      @guard_time_proc = case guard_time
+      @guard_time_proc = case @guard_time
         when NilClass
           nil
         when Numeric
-          guard_time and proc do |dt, name|
-            if dt > guard_time
+          @guard_time and proc do |dt, name|
+            if dt > @guard_time
               ecaller = caller.find{|t| !(t=~/lib\/eventbox(\/|\.rb:)/) }
-              warn "guard time exceeded: #{"%2.3f" % dt} sec (limit is #{guard_time}) in `#{name}' called from `#{ecaller}' - please move blocking tasks to actions"
+              warn "guard time exceeded: #{"%2.3f" % dt} sec (limit is #{@guard_time}) in `#{name}' called from `#{ecaller}' - please move blocking tasks to actions"
             end
           end
         when Proc
-          guard_time
+          @guard_time
         else
           raise ArgumentError, "guard_time should be Numeric, Proc or nil"
       end
