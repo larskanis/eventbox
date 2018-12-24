@@ -87,10 +87,8 @@ This is due to the wrapping that is activated by {Eventbox::Boxable.async_call a
 The {Eventbox::Boxable.yield_call yield_call} method definition divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
 In contrast {Eventbox::Boxable.async_call async_call} defines a method which handles one event only - the start of the call: The external call completes immediately and always returns `self`.
 
-rdoc-image:images/queue_calls.svg
-![Queue calls](images/queue_calls.svg?raw=true "Queue call flow")
-
-Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+<a name="my_queue_image"></a>
+{include:file:docs/my_queue_calls_github.md}
 
 The branch in `Queue#deq` shows a typical decision taking in Eventbox:
 If the call can be processed immediately it yields the result, else wise the result is added to an internal list to be processes later.
@@ -132,6 +130,8 @@ It is recommended to work them through, in order to fully understand how Eventbo
 * {file:docs/downloads.md HTTP client} - Understand how to use actions to build a HTTP client which downloads several URLs in parallel.
 * {file:docs/server.md TCP server} - Understand how to startup and shutdown blocking actions and to combine several Eventbox classes to handle parallel connections.
 * {file:docs/threadpool.md Thread-pool} - Understand how parallel external requests can be serialized and scheduled.
+
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
 
 
 ## Method types
@@ -189,9 +189,13 @@ In such cases it can be marked as {Eventbox#shared_object shared_object}.
 This wrapping is similar to `€` argument variables, however {Eventbox#shared_object shared_object} it more versatile.
 It marks objects permanently and wraps them even when they are stored inside of a copied object.
 
+<a name="external-scope"></a>
 ### External scope
 
 Code outside of the Eventbox class is referred to as "external scope".
+The external scope is recognized as one common space.
+Code running here, is expected to be thread-safe.
+See also [What is safe and what isn't?](#eventbox-safety) below.
 
 
 ## Block and Proc types
@@ -252,6 +256,7 @@ Another use of exceptions is for sending signals to running actions.
 This is done by {Eventbox::Action#raise}.
 
 
+<a name="eventbox-safety"></a>
 ## What is safe and what isn't?
 
 At each transition of the scope all passing objects are sanitized by the {Eventbox::Sanitizer}.
@@ -259,7 +264,7 @@ It protects the event scope from data races and arbitrates between blocking and 
 This is done by copying or wrapping the objects conveniently as described in the {Eventbox::Sanitizer}.
 That way event scope methods never get an inconsistent state regardless of the activities of external threads.
 
-Obviously it's not safe to do things like using `send` to call private methods from external, access instance variables per `instance_variable_set` or use global variables in a multithreading context.
+Obviously it's not safe to do things like using `send` to call private methods from external, access instance variables per `instance_variable_set` or use class or global variables in a multithreading context.
 Such rough ways of communication with an Eventbox object are surely neither recommended nor supported.
 Other than these the event scope of an Eventbox instance is pretty well protected against accident mistakes.
 

@@ -6,4 +6,4 @@
 --asset docs/images:images
 lib/**/*.rb
 -
-docs/**/*.md
+docs/*.md
