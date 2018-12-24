@@ -88,6 +88,7 @@ The {Eventbox::Boxable.yield_call yield_call} method definition divides the sing
 In contrast {Eventbox::Boxable.async_call async_call} defines a method which handles one event only - the start of the call: The external call completes immediately and always returns `self`.
 
 <a name="my_queue_image"></a>
+[![MyQueue calls](https://raw.github.com/larskanis/eventbox/master/docs/images/my_queue_calls.svg?sanitize=true)](https://www.rubydoc.info/github/larskanis/eventbox/master/file/README.md#my_queue_image)
 {include:file:docs/my_queue_calls_github.md}
 
 The branch in `Queue#deq` shows a typical decision taking in Eventbox:
