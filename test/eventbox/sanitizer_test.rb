@@ -198,17 +198,6 @@ class EventboxSanitizerTest < Minitest::Test
     assert_equal "abc", obj.a
   end
 
-  def test_dissect_struct_members_fails
-    eb = Class.new(Eventbox) do
-      sync_call def go(obj)
-        [obj.class, obj]
-      end
-    end.new
-    okl, obj = eb.go(Struct.new(:a).new("abc"))
-    assert_equal Eventbox::ExternalObject, okl
-    assert_equal "abc", obj.a
-  end
-
   class UnmarshalableTestObject < IO
     def initialize(a)
       super(0)
