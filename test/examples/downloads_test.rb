@@ -63,5 +63,7 @@ class ExamplesDownloadsTest < Minitest::Test
     assert_kind_of Exception, dls[0][1]
     assert_equal String, dls[1][1].class
     assert_equal String, dls[2][1].class
+
+    ParallelDownloads.eventbox_options[:threadpool].shutdown!
   end
 end

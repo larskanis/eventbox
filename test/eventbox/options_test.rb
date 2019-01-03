@@ -43,6 +43,7 @@ class EventboxOptionsTest < Minitest::Test
     end.new
 
     assert_equal 5, eb.ids.uniq.size
+    ec.eventbox_options[:threadpool].shutdown!
   end
 
   FastAndSlow = proc do

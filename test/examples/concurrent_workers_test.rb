@@ -54,6 +54,7 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
     end.map(&:value)
 
     assert_equal 10.times.map { |i| "task #{i} finished" }, values
+    cw.shutdown!
   end
 
   class ConcurrentWorkers2 < ConcurrentWorkers
@@ -89,6 +90,7 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
     end.map(&:value)
 
     assert_equal 10.times.map{|i| "task #{i} finished" }, values
+    cw.shutdown!
   end
 
   class ConcurrentWorkersWithCallback < ConcurrentWorkers2
@@ -132,5 +134,6 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
     cw.finish_tasks # should yield block to process
 
     assert_equal 10.times.map{|i| [i, "task #{i} finished"] }, 10.times.map{ values.deq }.sort
+    cw.shutdown!
   end
 end

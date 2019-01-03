@@ -15,6 +15,7 @@ class EventboxThreadBoxTest < Minitest::Test
     results = 50.times.map { q.deq }
     assert_equal 50.times.to_a, results.map(&:first).sort
     assert_equal 3, results.map(&:last).uniq.size
+    tp.shutdown!
   end
 
   def test_join_in_request
@@ -28,6 +29,7 @@ class EventboxThreadBoxTest < Minitest::Test
       end
       th.join
     end
+    tp.shutdown!
   end
 
   def test_join_in_running
@@ -39,6 +41,7 @@ class EventboxThreadBoxTest < Minitest::Test
       Thread.pass
       th.join
     end
+    tp.shutdown!
   end
 
   def test_join_after_finished
@@ -49,5 +52,6 @@ class EventboxThreadBoxTest < Minitest::Test
       Kernel.sleep 1
       th.join
     end
+    tp.shutdown!
   end
 end
