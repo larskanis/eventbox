@@ -302,7 +302,8 @@ def test_action_access_to_private_methods_doesnt_leak_instance_variables
       [@var1, @var2]
     end
   end.new
-  assert_equal [nil, 321], eb.go
+  res = silence_warnings { eb.go }
+  assert_equal [nil, 321], res
 end
 
 class TestActionRaise < Eventbox

@@ -45,6 +45,14 @@ def with_report_on_exception(enabled)
   end
 end
 
+def silence_warnings
+  original_verbosity = $VERBOSE
+  $VERBOSE = nil
+  res = yield
+  $VERBOSE = original_verbosity
+  res
+end
+
 def eval_file(local_file)
   fn = File.expand_path(local_file, __dir__)
   class_eval(File.read(fn, encoding: "UTF-8"), fn)
