@@ -120,6 +120,8 @@ class Eventbox
             Thread.handle_interrupt(Exception => :immediate) do
               sleep # Aborted by the exception
             end
+          rescue Eventbox::AbortAction
+            raise # The thread-pool was requested to shutdown
           rescue Exception
           end
         end
