@@ -82,14 +82,16 @@ class MyQueue < Eventbox
 end
 ```
 
+<a name="my_queue_image"></a>
+A picture describes it best:
+
+[![MyQueue calls](https://raw.github.com/larskanis/eventbox/master/docs/images/my_queue_calls.svg?sanitize=true)](https://www.rubydoc.info/github/larskanis/eventbox/master/file/README.md#my_queue_image)
+{include:file:docs/my_queue_calls_github.md}
+
 Although there are no mutex or condition variables in use, the implementation is thread-safe.
 This is due to the wrapping that is activated by {Eventbox::Boxable.async_call async_call} and {Eventbox::Boxable.yield_call yield_call} prefixes.
 The {Eventbox::Boxable.yield_call yield_call} method definition divides the single external call into two internal events: The event of the start of call and the event of releasing the call with a return value.
 In contrast {Eventbox::Boxable.async_call async_call} defines a method which handles one event only - the start of the call: The external call completes immediately and always returns `self`.
-
-<a name="my_queue_image"></a>
-[![MyQueue calls](https://raw.github.com/larskanis/eventbox/master/docs/images/my_queue_calls.svg?sanitize=true)](https://www.rubydoc.info/github/larskanis/eventbox/master/file/README.md#my_queue_image)
-{include:file:docs/my_queue_calls_github.md}
 
 The branch in `Queue#deq` shows a typical decision taking in Eventbox:
 If the call can be processed immediately it yields the result, else wise the result is added to an internal list to be processes later.
