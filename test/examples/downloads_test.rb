@@ -40,7 +40,7 @@ class ExamplesDownloadsTest < Minitest::Test
     attr_reader :downloads            # Threadsafe access to @download
   end
 
-  def test_queue
+  def test_downloads
     urls = %w[
       https://aruby-lang.ooorg
       https://github.com
