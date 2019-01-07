@@ -197,8 +197,13 @@ It marks objects permanently and wraps them even when they are stored inside of 
 
 Code outside of the Eventbox class is referred to as "external scope".
 The external scope is recognized as one common space.
-Code running here, is expected to be thread-safe.
+
+External objects can be directly called from action scope, since they are unwrapped when passed from event to action scope.
+In this case the object to be called should be thread-safe.
 See also [What is safe and what isn't?](#eventbox-safety) below.
+
+External objects can also be called from event scope per {Eventbox::ExternalObject#send_async}, but with some restrictions.
+The same restrictions applies to external closures too, which are callable from event scope per {Eventbox::ExternalProc#call_async}.
 
 
 ## Block and Proc types
