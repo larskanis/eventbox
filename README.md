@@ -56,7 +56,7 @@ It can therefore be used to build well known multithread abstractions like a Que
 ```ruby
 require "eventbox"
 class MyQueue < Eventbox
-  # Called at Queue.new just like Object#initialize in ordinary ruby classes
+  # Called at MyQueue.new just like Object#initialize in ordinary ruby classes
   async_call def init
     @que = []       # List of values waiting for being fetched by deq
     @waiting = []   # List of blocking deq calls waiting for new values to be pushed by enq
