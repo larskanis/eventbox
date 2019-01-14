@@ -8,8 +8,6 @@ class Eventbox
   #
   # All methods prefixed with "_" requires @mutex acquired to be called.
   class EventLoop
-    attr_reader :latest_answer_queue
-
     def initialize(threadpool, guard_time)
       @threadpool = threadpool
       @shutdown = false
@@ -131,11 +129,19 @@ class Eventbox
         @latest_answer_queue = nil
         @latest_call_name = nil
         @mutex.unlock
+        Thread.current.thread_variable_set(:__event_loop__, source_event_loop)
         diff_time = Time.now - start_time
         @guard_time_proc&.call(diff_time, name)
-        Thread.current.thread_variable_set(:__event_loop__, source_event_loop)
       end
       source_event_loop
+    end
+
+    def _latest_call_context
+      if @latest_answer_queue
+        ctx = BlockingExternalCallContext.new
+        ctx.__answer_queue__ = @latest_answer_queue
+      end
+      ctx
     end
 
     def async_call(box, name, args, block, wrapper)
@@ -291,7 +297,7 @@ class Eventbox
     end
 
     private def new_completion_proc(answer_queue, name, source_event_loop)
-      new_async_proc(name, CompletionProc) do |*resu|
+      pr = new_async_proc(name, CompletionProc) do |*resu|
         unless answer_queue
           # It could happen, that two threads call the CompletionProc simultanously so that nothing is raised here.
           # In this case the failure is caught in callback_loop instead, but in all other cases the failure is raised early here at the caller side.
@@ -306,6 +312,8 @@ class Eventbox
         answer_queue << resu
         answer_queue = nil
       end
+      pr.__answer_queue__ = answer_queue
+      pr
     end
 
     def callback_loop(answer_queue, source_event_loop, name)
@@ -360,6 +368,11 @@ class Eventbox
       object
     end
 
+    # Wrap an object as ExternalObject.
+    def €(object)
+      Sanitizer.wrap_object(object, nil, self, nil)
+    end
+
     def thread_finished(action)
       @mutex.synchronize do
         @running_actions.delete(action) or raise(ArgumentError, "unknown action has finished: #{action}")
@@ -377,20 +390,20 @@ class Eventbox
       end
     end
 
-    def _external_object_call(object, method, name, args, arg_block, cbresult, source_event_loop, creation_answer_queue)
+    def _external_object_call(object, method, name, args, arg_block, cbresult, source_event_loop, call_context)
       args = Sanitizer.sanitize_values(args, self, source_event_loop)
       arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
       cb = ExternalObjectCall.new(object, method, args, arg_block, cbresult)
 
-      if @latest_answer_queue
+      if call_context
+        # explicit call_context given
+        if call_context.__answer_queue__.closed?
+          raise InvalidAccess, "#{cb.objtype} #{"defined by `#{name}' " if name}was called with a call context that already returned"
+        end
+        call_context.__answer_queue__ << cb
+      elsif @latest_answer_queue
         # proc called by a sync or yield call/proc context
         @latest_answer_queue << cb
-      elsif creation_answer_queue
-        # proc called by a async call/proc context, but defined by a yield_call
-        if creation_answer_queue.closed?
-          raise InvalidAccess, "#{cb.objtype} #{"defined by `#{name}' " if name}was called by a 'async' method/proc after the defining method/proc returned - either change the yielding context from 'async' to a 'sync' or 'yield' or yield the value before the defining context returns"
-        end
-        creation_answer_queue << cb
       else
         raise InvalidAccess, "#{cb.objtype} #{"defined by `#{name}' " if name}was called by `#{@latest_call_name}', which must a sync_call, yield_call, sync_proc or yield_proc"
       end
@@ -398,7 +411,7 @@ class Eventbox
       nil
     end
 
-    def start_action(meth, name, args)
+    def start_action(meth, name, args, &block)
       # Actions might not be tagged to a calling event scope
       source_event_loop = Thread.current.thread_variable_get(:__event_loop__)
       Thread.current.thread_variable_set(:__event_loop__, nil)
@@ -410,9 +423,9 @@ class Eventbox
           begin
             Thread.handle_interrupt(AbortAction => :on_blocking) do
               if meth.arity == args.length
-                meth.call(*args)
+                meth.call(*args, &block)
               else
-                meth.call(*args, qu.deq)
+                meth.call(*args, qu.deq, &block)
               end
             end
           rescue AbortAction

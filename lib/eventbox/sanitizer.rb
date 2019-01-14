@@ -231,15 +231,17 @@ class Eventbox
 
     def wrap_proc(arg, name, source_event_loop, target_event_loop)
       if target_event_loop&.event_scope?
-        creation_answer_queue = target_event_loop.latest_answer_queue
         ExternalProc.new(arg, source_event_loop, name) do |*args, &block|
           if target_event_loop&.event_scope?
             # called in the event scope
+
             if block && !(WrappedProc === block)
               raise InvalidAccess, "calling #{arg.inspect} with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
             end
+
+            call_context = args.shift if CallContext === args.first
             cbblock = args.pop if Proc === args.last
-            target_event_loop._external_object_call(arg, :call, name, args, block, cbblock, source_event_loop, creation_answer_queue)
+            target_event_loop._external_object_call(arg, :call, name, args, block, cbblock, source_event_loop, call_context)
           else
             # called externally
             raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"
@@ -252,8 +254,7 @@ class Eventbox
 
     def wrap_object(object, source_event_loop, target_event_loop, name)
       if target_event_loop&.event_scope?
-        creation_answer_queue = target_event_loop.latest_answer_queue
-        ExternalObject.new(object, source_event_loop, target_event_loop, creation_answer_queue, name)
+        ExternalObject.new(object, source_event_loop, target_event_loop, name)
       else
         WrappedObject.new(object, source_event_loop, name)
       end
@@ -285,7 +286,7 @@ class Eventbox
 
   # Wrapper for objects created external or in the action scope of some Eventbox instance.
   #
-  # External objects can be called from event scope by {ExternalObject#send_async}.
+  # External objects can be called from event scope by {ExternalObject#send}.
   #
   # External objects can also be passed to action or to external scope.
   # In this case a {ExternalObject} is unwrapped back to the ordinary object.
@@ -293,10 +294,9 @@ class Eventbox
   # @see ExternalProc
   class ExternalObject < WrappedObject
     # @private
-    def initialize(object, event_loop, target_event_loop, creation_answer_queue, name=nil)
+    def initialize(object, event_loop, target_event_loop, name=nil)
       super(object, event_loop, name)
       @target_event_loop = target_event_loop
-      @creation_answer_queue = creation_answer_queue
     end
 
     # Invoke the external objects within the event scope.
@@ -304,7 +304,7 @@ class Eventbox
     # It can be called within {Eventbox::Boxable#sync_call sync_call} and {Eventbox::Boxable#yield_call yield_call} methods and from {Eventbox#sync_proc} and {Eventbox#yield_proc} closures.
     # The method then runs in the background on the thread that called the event scope method in execution.
     #
-    # It's also possible to invoke it within a {Eventbox::Boxable#async_call async_call} or {Eventbox#async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
+    # TODO: It's also possible to invoke it within a {Eventbox::Boxable#async_call async_call} or {Eventbox#async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
     # In this case the method runs in the background on the thread that is waiting for the yield call to return.
     #
     # If the call to the external object doesn't return immediately, it blocks the calling thread.
@@ -319,18 +319,24 @@ class Eventbox
     #     sync_call def init(€obj)  # €-variables are passed as reference instead of copy
     #       # invoke the object given to Sender.new
     #       # and when completed, print the result of strip
-    #       €obj.send_async :strip, ->(res){ p res }
+    #       €obj.send :strip, ->(res){ p res }
     #     end
     #   end
     #   Sender.new(" a b c ")    # Output: "a b c"
-    def send_async(method, *args, &block)
+    def send(method, *args, &block)
       if @target_event_loop&.event_scope?
         # called in the event scope
+        if CallContext === method
+          call_context = method
+          method = args.shift
+        end
+
         if block && !(WrappedProc === block)
           raise InvalidAccess, "calling `#{method}' with block argument #{block.inspect} is not allowed - use async_proc, sync_proc, yield_proc or an external proc instead"
         end
+
         cbblock = args.pop if Proc === args.last
-        @target_event_loop._external_object_call(@object, method, @name, args, block, cbblock, @event_loop, @creation_answer_queue)
+        @target_event_loop._external_object_call(@object, method, @name, args, block, cbblock, @event_loop, call_context)
       else
         # called externally
         raise InvalidAccess, "external object #{self.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"
@@ -372,6 +378,8 @@ class Eventbox
   #
   # Alternatively the yield call can respond with an exception by {CompletionProc#raise}.
   class CompletionProc < AsyncProc
+    include CallContext
+
     # Raise an exception in the context of the waiting {Eventbox::Boxable#yield_call yield_call} or {Eventbox#yield_proc} method.
     #
     # This allows to raise an exception to the calling scope from external or action scope:
@@ -396,7 +404,7 @@ class Eventbox
 
   # Wrapper for Proc objects created external or in the action scope of some Eventbox instance.
   #
-  # External Proc objects can be invoked from event scope by {ExternalProc#call_async}.
+  # External Proc objects can be invoked from event scope by {ExternalProc#call}.
   # It can be called within {Eventbox::Boxable#sync_call sync_call} and {Eventbox::Boxable#yield_call yield_call} methods and from {Eventbox#sync_proc} and {Eventbox#yield_proc} closures.
   # The proc then runs in the background on the thread that called the event scope method in execution.
   #
@@ -410,7 +418,7 @@ class Eventbox
   #     sync_call def init(&block)
   #       # invoke the block given to Callback.new
   #       # and when completed, print the result of the block
-  #       block.call_async 5, ->(res){ p res }
+  #       block.call 5, ->(res){ p res }
   #     end
   #   end
   #   Callback.new {|num| num + 1 }    # Output: 6
@@ -433,19 +441,6 @@ class Eventbox
     def object_for(target_event_loop)
       @event_loop == target_event_loop ? @object : self
     end
-
-    alias call_async call
-    alias yield_async yield
-
-    # @private
-    def self.deprectate(name, repl)
-      define_method(name) do |*args, &block|
-        warn "#{caller[0]}: please use `#{repl}' instead of `#{name}' to call external procs"
-        send(repl, *args, &block)
-      end
-    end
-    deprectate :call, :call_async
-    deprectate :yield, :yield_async
   end
 
   # @private

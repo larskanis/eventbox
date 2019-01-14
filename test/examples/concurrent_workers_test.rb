@@ -105,7 +105,7 @@ class ExamplesConcurrentWorkersTest < Minitest::Test
     end
 
     sync_call def task_finished(workerid, result)
-      @working.delete(workerid).yield_async result
+      @working.delete(workerid).yield result
       if @tasks.empty? && @working.empty?
         @notify_when_finished.each(&:yield)
       end

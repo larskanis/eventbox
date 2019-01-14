@@ -2,10 +2,11 @@
 
 require "weakref"
 require "eventbox/argument_wrapper"
-require "eventbox/sanitizer"
+require "eventbox/call_context"
 require "eventbox/boxable"
 require "eventbox/event_loop"
 require "eventbox/object_registry"
+require "eventbox/sanitizer"
 
 class Eventbox
   autoload :VERSION, "eventbox/version"
@@ -104,7 +105,7 @@ class Eventbox
       self.class.instance_variable_set(:@eventbox_methods_checked, true)
 
       obj = Object.new
-      meths = methods - obj.methods - [:__getobj__, :shutdown!, :shared_object]
+      meths = methods - obj.methods - [:__getobj__, :shutdown!, :shared_object, :€, :send_async, :yield_async, :call_async]
       prmeths = private_methods - obj.private_methods
       prohib = meths.find do |name|
         !prmeths.include?(:"__#{name}__")
@@ -242,7 +243,7 @@ class Eventbox
   # A marked object is never passed as copy, but passed as reference.
   # The object is therefore wrapped as {WrappedObject} or {ExternalObject} when used in an unsafe scope.
   # Objects marked within the event scope are wrapped as {WrappedObject}, which denies access from external/action scope or the event scope of a different Eventbox instance.
-  # Objects marked in external/action scope are wrapped as {ExternalObject} which allows {External.send_async asynchronous calls} from event scope.
+  # Objects marked in external/action scope are wrapped as {ExternalObject} which allows {External.send asynchronous calls} from event scope.
   # In all cases the object can be passed as reference and is automatically unwrapped when passed back to the original scope.
   # It can therefore be used to modify the original object even after traversing the boundaries.
   #
@@ -265,6 +266,50 @@ class Eventbox
   #   e.go(o, o)              # => [#<struct A a="abc">, #<struct A a="abc">]
   public def shared_object(object)
     @__event_loop__.shared_object(object)
+  end
+
+  public def €(object)
+    @__event_loop__.€(object)
+  end
+
+  public def call_async(obj, *args, &block)
+    send_async(obj, :call, *args, &block)
+  end
+  alias yield_async call_async
+
+  public def send_async(obj, method, *args, &block)
+    if @__event_loop__.event_scope?
+      meth = obj.method(method)
+      args = Sanitizer.sanitize_values(args, @__event_loop__, nil)
+      block = Sanitizer.sanitize_value(block, @__event_loop__, nil)
+      @__event_loop__.start_action(meth, self.class, args, &block)
+      nil
+    else
+      raise InvalidAccess, "not in event scope"
+    end
+  end
+
+  # Starts a new action dedicated to call external objects.
+  #
+  # It returns a {CallContext} which can be used with {Eventbox::ExternalObject#send} and {Eventbox::ExternalProc#call}.
+  private def new_action_call_context
+    ActionCallContext.new(@__event_loop__)
+  end
+
+  # Get the context of the waiting external call within a yield or sync method or closure.
+  #
+  # Callable within the event scope only.
+  #
+  # @returns [ActionCallContext]  The current call context.
+  #   Returns +nil+ in async_call or async_proc context.
+  #
+  # Usabel as first parameter to {ExternalProc.call} and {ExternalObject.send}.
+  private def call_context
+    if @__event_loop__.event_scope?
+      @__event_loop__._latest_call_context
+    else
+      raise InvalidAccess, "not in event scope"
+    end
   end
 
   # Force stop of all action threads spawned by this {Eventbox} instance.

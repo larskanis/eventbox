@@ -307,7 +307,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_object_call_tagged
     fc = Class.new(Eventbox) do
       yield_call def go(str, result)
-        str.send_async :strip, ->(v){ result.yield v }
+        str.send :strip, ->(v){ result.yield v }
       end
     end.new
 
@@ -342,7 +342,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_should_return_nil
     fc = Class.new(Eventbox) do
       sync_call def go(pr, str)
-        pr.call_async(str+"b")
+        pr.call(str+"b")
       end
     end.new
 
@@ -353,7 +353,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_object_called_internally_should_return_nil
     fc = Class.new(Eventbox) do
       sync_call def go(€ext_obj)
-        €ext_obj.send_async(:concat, "b")
+        €ext_obj.send(:concat, "b")
       end
     end.new
 
@@ -363,7 +363,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_without_completion_block
     fc = Class.new(Eventbox) do
       sync_call def init(pr)
-        pr.call_async(5)
+        pr.call(5)
       end
     end
 
@@ -376,7 +376,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_object_called_internally_without_completion_block
     fc = Class.new(Eventbox) do
       sync_call def init(€ext_obj)
-        €ext_obj.send_async(:concat, "b")
+        €ext_obj.send(:concat, "b")
       end
     end
 
@@ -388,7 +388,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_sync_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, str, result)
-        pr.call_async(str+"b", &sync_proc do |r|
+        pr.call(str+"b", &sync_proc do |r|
           result.yield(r+"d")
         end)
       end
@@ -402,7 +402,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_object_called_internally_with_sync_block
     fc = Class.new(Eventbox) do
       yield_call def go(€str, result)
-        €str.send_async(:each_char, &sync_proc do |r|
+        €str.send(:each_char, &sync_proc do |r|
           result.yield(r+"b")
         end)
       end
@@ -416,7 +416,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_external_block
     fc = Class.new(Eventbox) do
       sync_call def go(pr)
-        pr.call_async(pr.class, &pr)
+        pr.call(pr.class, &pr)
       end
     end.new
 
@@ -430,7 +430,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_plain_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, result)
-        pr.call_async do
+        pr.call do
         end
       end
     end.new
@@ -443,7 +443,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_object_called_internally_with_plain_block
     fc = Class.new(Eventbox) do
       yield_call def go(€str, result)
-        €str.send_async :each_char do
+        €str.send :each_char do
         end
       end
     end.new
@@ -455,7 +455,7 @@ class EventboxCallTest < Minitest::Test
   def test_external_proc_called_internally_with_completion_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, ext_obj, result)
-        pr.call_async(5, ext_obj, ext_obj.class, IO.pipe[0], proc do |n, ext_obj2|
+        pr.call(5, ext_obj, ext_obj.class, IO.pipe[0], proc do |n, ext_obj2|
           result.yield n, ext_obj2, ext_obj2.class, ext_obj, ext_obj.class, IO.pipe[0]
         end)
       end
@@ -528,7 +528,7 @@ class EventboxCallTest < Minitest::Test
         end
       end
       yield_call def n(result)
-        @block.call_async("a", proc { |r| result.yield(r+"c") })
+        @block.call("a", proc { |r| result.yield(r+"c") })
       end
     end.new
 
@@ -571,7 +571,7 @@ class EventboxCallTest < Minitest::Test
     fc = Class.new(Eventbox) do
       sync_call def pr
         async_proc do |&block|
-          block.call_async
+          block.call
         end
       end
     end.new
@@ -585,7 +585,7 @@ class EventboxCallTest < Minitest::Test
     fc = Class.new(Eventbox) do
       sync_call def pr
         sync_proc do |n, &block|
-          block.call_async(n+"b", proc { |r| @n = r+"d" })
+          block.call(n+"b", proc { |r| @n = r+"d" })
         end
       end
       attr_reader :n
@@ -686,7 +686,7 @@ class EventboxCallTest < Minitest::Test
     fc = Class.new(Eventbox) do
       sync_call def pr
         yield_proc do |n, result, &block|
-          block.call_async(n+"b", proc { |r| result.yield(r+"d") })
+          block.call(n+"b", proc { |r| result.yield(r+"d") })
         end
       end
     end.new
@@ -733,7 +733,7 @@ class EventboxCallTest < Minitest::Test
         @bl = block
       end
       async_call def go
-        @bl.yield_async
+        @bl.yield
       end
     end.new { }
 
@@ -753,7 +753,7 @@ class EventboxCallTest < Minitest::Test
       end
 
       async_call def go(result)
-        @block.call_async("a", proc { result.yield })
+        @block.call(result, "a", proc { result.yield })
       end
     end
 
@@ -766,7 +766,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def init(result, &block)
         start_response(async_proc do
-          block.call_async("a", proc do
+          block.call(result, "a", proc do
             result.yield
           end)
         end)
@@ -786,7 +786,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def go(€str, result)
         start_response(async_proc do
-          €str.send_async(:concat, "b", proc do |str2|
+          €str.send(result, :concat, "b", proc do |str2|
             result.yield str2
           end)
         end)
@@ -807,7 +807,7 @@ class EventboxCallTest < Minitest::Test
       sync_call def go
         yield_proc do |result, &block|
           start_response(async_proc do
-            block.call_async("a", proc do
+            block.call(result, "a", proc do
               result.yield
             end)
           end)
@@ -828,7 +828,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def init(result, &block)
         start_response(sync_proc do
-          block.call_async("c", proc do
+          block.call(call_context, "c", proc do
             result.yield
           end)
         end)
@@ -850,6 +850,7 @@ class EventboxCallTest < Minitest::Test
     ec = Class.new(Eventbox) do
       sync_call def init(&block)
         @block = block
+        @init_context = call_context
       end
 
       yield_call def go1(result)
@@ -861,14 +862,14 @@ class EventboxCallTest < Minitest::Test
       end
 
       async_call def go2(result)
-        @block.call_async("c", proc { result.yield })
+        @block.call(@init_context, "c", proc { result.yield })
       end
     end
 
     eb = ec.new {}
     with_report_on_exception(false) do
       err = assert_raises(Eventbox::InvalidAccess) { eb.go1 }
-      assert_match(/closure defined by `init' was called by .* after .* returned/, err.to_s)
+      assert_match(/closure defined by `init' was called .* already returned/, err.to_s)
     end
   end
 
@@ -876,7 +877,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def value(result, &block)
         result.yield
-        block.call_async
+        block.call
       end
     end.new
 
@@ -888,7 +889,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def value(€str, result)
         result.yield
-        €str.send_async(:to_i)
+        €str.send(:to_i)
       end
     end.new
 
@@ -901,7 +902,7 @@ class EventboxCallTest < Minitest::Test
       sync_call def raising_proc
         yield_proc do |result, &block|
           result.raise
-          block.call_async
+          block.call
         end
       end
     end.new
@@ -915,7 +916,7 @@ class EventboxCallTest < Minitest::Test
       sync_call def raising_proc
         yield_proc do |€str, result|
           result.raise
-          €str.send_async(:to_i)
+          €str.send(:to_i)
         end
       end
     end.new
@@ -932,7 +933,7 @@ class EventboxCallTest < Minitest::Test
       end
 
       yield_call def call_block(result)
-        @block.yield_async(@str+"c", proc do |cbstr|
+        @block.yield(@str+"c", proc do |cbstr|
           result.yield(cbstr+"e")
         end)
       end
@@ -953,7 +954,7 @@ class EventboxCallTest < Minitest::Test
       end
 
       sync_call def call_block(&block)
-        @block.yield_async(@str+"c", proc do |cbstr|
+        @block.yield(@str+"c", proc do |cbstr|
           @str = cbstr+"e"
         end)
         123
@@ -1015,7 +1016,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       sync_call def callback(str, &block)
         if block
-          block.yield_async(str+"d")
+          block.yield(str+"d")
         end
         str+"b"
       end
@@ -1037,7 +1038,7 @@ class EventboxCallTest < Minitest::Test
     eb = Class.new(Eventbox) do
       yield_call def callback(str, result, &block)
         if block
-          block.yield_async(str+"d", proc do |str2|
+          block.yield(str+"d", proc do |str2|
             result.yield str2+"c"
           end)
         else
@@ -1071,7 +1072,7 @@ class EventboxCallTest < Minitest::Test
       end
 
       yield_call def call_back(block, str, result)
-        block.yield_async(str+"d", proc do |cbstr|
+        block.yield(str+"d", proc do |cbstr|
           result.yield(cbstr+"f")
         end)
       end

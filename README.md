@@ -161,7 +161,7 @@ This limit can be changed by {Eventbox.with_options}.
 Arguments of async, sync and yield calls can be prefixed by a `€` sign.
 This marks them as to be passed through as reference, instead of being copied.
 A `€`-variable is wrapped and protected within the event scope, but unwrapped when passed to action or external scope.
-It can be called within the event scope by {Eventbox::ExternalObject#send_async}.
+It can be called within the event scope by {Eventbox::ExternalObject#send}.
 
 In addition there are accessor methods usable as known from ordinary ruby objects: {Eventbox.attr_reader attr_reader},  {Eventbox.attr_writer attr_writer} and  {Eventbox.attr_accessor attr_accessor}.
 They allow thread-safe access to instance variables.
@@ -202,8 +202,8 @@ External objects can be directly called from action scope, since they are unwrap
 In this case the object to be called should be thread-safe.
 See also [What is safe and what isn't?](#eventbox-safety) below.
 
-External objects can also be called from event scope per {Eventbox::ExternalObject#send_async}, but with some restrictions.
-The same restrictions applies to external closures too, which are callable from event scope per {Eventbox::ExternalProc#call_async}.
+External objects can also be called from event scope per {Eventbox::ExternalObject#send}, but with some restrictions.
+The same restrictions applies to external closures too, which are callable from event scope per {Eventbox::ExternalProc#call}.
 
 
 ## Block and Proc types

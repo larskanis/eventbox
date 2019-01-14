@@ -597,3 +597,71 @@ def test_sync_proc_in_action
   err = assert_raises(Eventbox::InvalidAccess) { eb.go(:yield_proc) }
   assert_match(/yield_proc outside of the event scope is not allowed/, err.to_s)
 end
+
+def test_new_action_call_context_on_external_object
+  eb = Class.new(Eventbox) do
+    yield_call def go(€obj, result)
+      ctx = new_action_call_context
+      €obj.send(ctx, :concat, "a")
+      €obj.send(ctx, :concat, "b", proc{|res| result.yield ctx.class, res })
+    end
+  end.new
+
+  assert_equal [Eventbox::ActionCallContext, "ab"], eb.go("".dup)
+end
+
+def test_new_action_call_context_on_external_proc
+  eb = Class.new(Eventbox) do
+    yield_call def go(result, &block)
+      ctx = new_action_call_context
+      block.call(ctx, "a")
+      block.call(ctx, "b", proc{|res| result.yield ctx.class, res })
+    end
+  end.new
+
+  strs = []
+  ths = []
+  ctx, res = eb.go do |str|
+    strs << str
+    ths << Thread.current
+    5
+  end
+
+  assert_equal Eventbox::ActionCallContext, ctx
+  assert_equal 5, res
+  assert_equal %w[ a b ], strs
+  refute_equal Thread.current, ths[0]
+  refute_equal Thread.current, ths[1]
+  assert_equal ths[0], ths[1]
+end
+
+def test_call_async_on_external_proc
+  eb = Class.new(Eventbox) do
+    yield_call def go(result, &block)
+      call_async(block, "a", result)
+    end
+  end.new
+
+  res = eb.go do |str|
+    str+"b"
+  end
+
+  assert_equal "ab", res
+end
+
+def test_call_chain
+  eb = Class.new(Eventbox) do
+    yield_call def go(€obj, result)
+      ctx = new_action_call_context
+      ctx[€obj, :concat, "a"].then do |€res|
+        [€res, :concat, "b"]
+      end.then do |€res|
+        [€res, :concat, "c"]
+      end.then do |€res|
+        result.yield ctx.class, €res
+      end
+    end
+  end.new
+
+  assert_equal [Eventbox::ActionCallContext, "abc"], eb.go("".dup)
+end
