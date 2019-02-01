@@ -25,6 +25,7 @@ class EventboxAttrAccessorTest < Minitest::Test
 
     fc.percent = 10
     assert_equal 10, fc.get
+    assert_raises(NoMethodError) { fc.percent }
   end
 
   def test_attr_reader
@@ -36,5 +37,6 @@ class EventboxAttrAccessorTest < Minitest::Test
     end.new
 
     assert_equal 10, fc.percent
+    assert_raises(NoMethodError) { fc.percent = 3 }
   end
 end
