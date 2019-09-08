@@ -268,9 +268,9 @@ class Eventbox
     attr_reader :name
     # @private
     def initialize(object, event_loop, name=nil)
-      @object = object
-      @event_loop = event_loop
-      @name = name
+      @object = object # the object to be wrapped
+      @event_loop = event_loop # the event_loop @object originates from, nil if external scope
+      @name = name # some information to get more meaningful error messages
       @dont_marshal = ExternalSharedObject # protect self from being marshaled
     end
 
@@ -280,7 +280,11 @@ class Eventbox
     end
 
     def inspect
-      "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect}>"
+      el = case @event_loop
+        when EventLoop then @event_loop.object_id.to_s(16)
+        else @event_loop.inspect
+      end
+      "#<#{self.class} @object=#{@object.inspect} @name=#{@name.inspect} @event_loop=#{el}>"
     end
   end
 
