@@ -144,6 +144,14 @@ class Eventbox
       ctx
     end
 
+    def with_call_context(ctx)
+      orig_context = @latest_answer_queue
+      @latest_answer_queue = ctx.__answer_queue__
+      yield
+    ensure
+      @latest_answer_queue = orig_context
+    end
+
     def async_call(box, name, args, block, wrapper)
       with_call_frame(name, nil) do |source_event_loop|
         args = wrapper.call(source_event_loop, self, *args) if wrapper
@@ -391,6 +399,11 @@ class Eventbox
     end
 
     def _external_object_call(object, method, name, args, arg_block, cbresult, source_event_loop, call_context)
+# TODO: Implement €-wrapping on call results
+#       if cbresult
+#         wrapper = ArgumentWrapper.build(cbresult, name)
+#         args = wrapper.call(self, source_event_loop, *args)
+#       end
       args = Sanitizer.sanitize_values(args, self, source_event_loop)
       arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
       cb = ExternalObjectCall.new(object, method, args, arg_block, cbresult)

@@ -272,23 +272,6 @@ class Eventbox
     @__event_loop__.€(object)
   end
 
-  public def call_async(obj, *args, &block)
-    send_async(obj, :call, *args, &block)
-  end
-  alias yield_async call_async
-
-  public def send_async(obj, method, *args, &block)
-    if @__event_loop__.event_scope?
-      meth = obj.method(method)
-      args = Sanitizer.sanitize_values(args, @__event_loop__, nil)
-      block = Sanitizer.sanitize_value(block, @__event_loop__, nil)
-      @__event_loop__.start_action(meth, self.class, args, &block)
-      nil
-    else
-      raise InvalidAccess, "not in event scope"
-    end
-  end
-
   # Starts a new action dedicated to call external objects.
   #
   # It returns a {CallContext} which can be used with {Eventbox::ExternalObject#send} and {Eventbox::ExternalProc#call}.
@@ -307,6 +290,14 @@ class Eventbox
   private def call_context
     if @__event_loop__.event_scope?
       @__event_loop__._latest_call_context
+    else
+      raise InvalidAccess, "not in event scope"
+    end
+  end
+
+  private def with_call_context(ctx, &block)
+    if @__event_loop__.event_scope?
+      @__event_loop__.with_call_context(ctx, &block)
     else
       raise InvalidAccess, "not in event scope"
     end

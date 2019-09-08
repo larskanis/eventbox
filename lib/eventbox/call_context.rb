@@ -17,6 +17,7 @@ class Eventbox
     end
   end
 
+  # This is just an experiment and doesn't work
   class CallChain
     include CallContext
 
@@ -64,12 +65,12 @@ class Eventbox
     def initialize(event_loop)
       answer_queue = Queue.new
       meth = proc do
-        event_loop.callback_loop(answer_queue, event_loop, self.class)
+        event_loop.callback_loop(answer_queue, nil, self.class)
       end
       @action = event_loop.start_action(meth, self.class, [])
 
       def answer_queue.gc_stop(object_id)
-        enq nil
+        close
       end
       ObjectSpace.define_finalizer(self, answer_queue.method(:gc_stop))
 
@@ -83,7 +84,7 @@ class Eventbox
     #
     # The method returns immediately and the corresponding action is terminated asynchonously.
     def shutdown!
-      @__answer_queue__.enq nil unless @__answer_queue__.closed?
+      @__answer_queue__.close
     end
   end
 end

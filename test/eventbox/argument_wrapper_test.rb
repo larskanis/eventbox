@@ -258,4 +258,19 @@ class EventboxArgumentWrapperTest < Minitest::Test
       end
     end
   end
+
+  def test_with_call_context
+    skip "€ wrapping is not yet implemented on results of external object calls"
+    eb = Class.new(Eventbox) do
+      yield_call def go(€obj, result)
+        €obj.send :concat, "a", -> (€r1) do
+          €r1.send :concat, "b", -> (€r2) do
+            result.yield ctx.class, €r2
+          end
+        end
+      end
+    end.new
+
+    assert_equal [Eventbox::ActionCallContext, "abc"], eb.go("".dup)
+  end
 end

@@ -635,33 +635,52 @@ def test_new_action_call_context_on_external_proc
   assert_equal ths[0], ths[1]
 end
 
-def test_call_async_on_external_proc
+def test_async_call_with_call_context
   eb = Class.new(Eventbox) do
-    yield_call def go(result, &block)
-      call_async(block, "a", result)
-    end
-  end.new
-
-  res = eb.go do |str|
-    str+"b"
-  end
-
-  assert_equal "ab", res
-end
-
-def test_call_chain
-  eb = Class.new(Eventbox) do
-    yield_call def go(€obj, result)
+    async_call def go(€obj)
       ctx = new_action_call_context
-      ctx[€obj, :concat, "a"].then do |€res|
-        [€res, :concat, "b"]
-      end.then do |€res|
-        [€res, :concat, "c"]
-      end.then do |€res|
-        result.yield ctx.class, €res
+      with_call_context(ctx) do
+        €obj.send :enq, ctx.class
       end
     end
   end.new
 
-  assert_equal [Eventbox::ActionCallContext, "abc"], eb.go("".dup)
+  q = Queue.new
+  eb.go(q)
+  assert_equal Eventbox::ActionCallContext, q.deq
 end
+
+def test_yield_call_with_call_context
+  eb = Class.new(Eventbox) do
+    yield_call def go(€obj, result)
+      ctx = new_action_call_context
+      with_call_context(ctx) do
+        €obj.send(:current, -> (€th) { result.yield €th })
+      end
+    end
+  end.new
+
+  res = eb.go(Thread)
+  assert_equal Thread, res.class
+  refute_equal Thread.current, res
+end
+
+
+# Not working - just an idea:
+#
+# def test_call_chain
+#   eb = Class.new(Eventbox) do
+#     yield_call def go(€obj, result)
+#       ctx = new_action_call_context
+#       ctx[€obj, :concat, "a"].then do |€res|
+#         [€res, :concat, "b"]
+#       end.then do |€res|
+#         [€res, :concat, "c"]
+#       end.then do |€res|
+#         result.yield ctx.class, €res
+#       end
+#     end
+#   end.new
+#
+#   assert_equal [Eventbox::ActionCallContext, "abc"], eb.go("".dup)
+# end

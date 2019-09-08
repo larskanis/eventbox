@@ -427,6 +427,16 @@ class EventboxCallTest < Minitest::Test
     fc.go(pr)
   end
 
+  def test_external_proc_called_internally_uses_calling_thread
+    eb = Class.new(Eventbox) do
+      yield_call def go(€obj, result)
+        €obj.send(:current, -> (€th) { result.yield €th })
+      end
+    end.new
+
+    assert_equal Thread.current, eb.go(Thread)
+  end
+
   def test_external_proc_called_internally_with_plain_block
     fc = Class.new(Eventbox) do
       yield_call def go(pr, result)
