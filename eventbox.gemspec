@@ -25,7 +25,7 @@ Gem::Specification.new do |spec|
   spec.metadata["yard.run"] = "yri" # use "yard" to build full HTML docs.
 
   spec.add_development_dependency "bundler", ">= 1.16", "< 3"
-  spec.add_development_dependency "rake", "~> 10.0"
+  spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "minitest", "~> 5.0"
   spec.add_development_dependency "minitest-hooks"
   spec.add_development_dependency "yard", "~> 0.9"
