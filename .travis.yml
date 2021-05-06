@@ -3,14 +3,14 @@ sudo: false
 language: ruby
 cache: bundler
 matrix:
-  fast_finish: true
+  fast_finish: false
   include:
-    - rvm: 2.3.8
-    - rvm: 2.5.3
+    - rvm: 3.0.1
       env: RUBYOPT=--verbose --enable-frozen-string-literal
-    - rvm: jruby-9.2.4.1
     - rvm: ruby-head
       env: RUBYOPT=--verbose --enable-frozen-string-literal
+
+    # JRuby and Truffleruby don't support keyword argument semantics of ruby-3.0
 
 script:
   - bundle exec rake test TESTOPTS=-v
