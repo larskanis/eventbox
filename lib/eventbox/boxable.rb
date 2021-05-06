@@ -47,13 +47,13 @@ class Eventbox
     def async_call(name, &block)
       unbound_method = self.instance_method(name)
       wrapper = ArgumentWrapper.build(unbound_method, name)
-      with_block_or_def(name, block) do |*args, &cb|
+      with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
-          unbound_method.bind(eventbox).call(*args, &cb)
+          unbound_method.bind(eventbox).call(*args, **kwargs, &cb)
         else
-          @__event_loop__.async_call(eventbox, name, args, cb, wrapper)
+          @__event_loop__.async_call(eventbox, name, args, kwargs, cb, wrapper)
         end
         self
       end
@@ -77,12 +77,12 @@ class Eventbox
     def sync_call(name, &block)
       unbound_method = self.instance_method(name)
       wrapper = ArgumentWrapper.build(unbound_method, name)
-      with_block_or_def(name, block) do |*args, &cb|
+      with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
-          unbound_method.bind(eventbox).call(*args, &cb)
+          unbound_method.bind(eventbox).call(*args, **kwargs, &cb)
         else
           answer_queue = Queue.new
-          sel = @__event_loop__.sync_call(eventbox, name, args, cb, answer_queue, wrapper)
+          sel = @__event_loop__.sync_call(eventbox, name, args, kwargs, cb, answer_queue, wrapper)
           @__event_loop__.callback_loop(answer_queue, sel, name)
         end
       end
@@ -116,8 +116,7 @@ class Eventbox
       with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
           @__event_loop__.internal_yield_result(args, name)
-          args << kwargs unless kwargs.empty?
-          unbound_method.bind(eventbox).call(*args, &cb)
+          unbound_method.bind(eventbox).call(*args, **kwargs, &cb)
           self
         else
           answer_queue = Queue.new

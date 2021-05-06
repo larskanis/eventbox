@@ -21,6 +21,7 @@ class Eventbox
         decls = []
         convs = []
         rets = []
+        kwrets = []
         parameters.each_with_index do |(t, n), i|
           €var = n.to_s.start_with?("€")
           case t
@@ -47,7 +48,7 @@ class Eventbox
             if €var
               convs << "#{n} = Sanitizer.wrap_object(#{n}, source_event_loop, target_event_loop, :#{n})"
             end
-            rets << "#{n}: #{n}"
+            kwrets << "#{n}: #{n}"
           when :key
             decls << "#{n}:nil"
             if €var
@@ -55,20 +56,20 @@ class Eventbox
             else
               convs << "#{n} = #{n} ? {#{n}: #{n}} : {}"
             end
-            rets << "**#{n}"
+            kwrets << "**#{n}"
           when :keyrest
             decls << "**#{n}"
             if €var
-              convs << "#{n}.each{|k, v| #{n}[k] = Sanitizer.wrap_object(v, source_event_loop, target_event_loop, :#{n}) }"
+              convs << "#{n}.transform_values!{|v| Sanitizer.wrap_object(v, source_event_loop, target_event_loop, :#{n}) }"
             end
-            rets << "**#{n}"
+            kwrets << "**#{n}"
           when :block
             if €var
               raise "block to `#{name}' can't be wrapped"
             end
           end
         end
-        code = "#{is_proc ? :proc : :lambda} do |source_event_loop, target_event_loop#{decls.map{|s| ",#{s}"}.join }| # #{name}\n  #{convs.join("\n")}\n  [#{rets.join(",")}]\nend"
+        code = "#{is_proc ? :proc : :lambda} do |source_event_loop, target_event_loop#{decls.map{|s| ",#{s}"}.join }| # #{name}\n  #{convs.join("\n")}\n  [[#{rets.join(",")}],{#{kwrets.join(",")}}]\nend"
         instance_eval(code, "wrapper code defined in #{__FILE__}:#{__LINE__} for #{name}")
       end
     end

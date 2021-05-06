@@ -229,9 +229,13 @@ class Eventbox
       args.map { |arg| sanitize_value(arg, source_event_loop, target_event_loop, name) }
     end
 
+    def sanitize_kwargs(args, source_event_loop, target_event_loop, name=nil)
+      args.transform_values { |arg| sanitize_value(arg, source_event_loop, target_event_loop, name) }
+    end
+
     def wrap_proc(arg, name, source_event_loop, target_event_loop)
       if target_event_loop&.event_scope?
-        ExternalProc.new(arg, source_event_loop, name) do |*args, &block|
+        ExternalProc.new(arg, source_event_loop, name) do |*args, **kwargs, &block|
           if target_event_loop&.event_scope?
             # called in the event scope
 
@@ -241,7 +245,7 @@ class Eventbox
 
             call_context = args.shift if CallContext === args.first
             cbblock = args.pop if Proc === args.last
-            target_event_loop._external_object_call(arg, :call, name, args, block, cbblock, source_event_loop, call_context)
+            target_event_loop._external_object_call(arg, :call, name, args, kwargs, block, cbblock, source_event_loop, call_context)
           else
             # called externally
             raise InvalidAccess, "external proc #{arg.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"
@@ -327,7 +331,7 @@ class Eventbox
     #     end
     #   end
     #   Sender.new(" a b c ")    # Output: "a b c"
-    def send(method, *args, &block)
+    def send(method, *args, **kwargs, &block)
       if @target_event_loop&.event_scope?
         # called in the event scope
         if CallContext === method
@@ -340,7 +344,7 @@ class Eventbox
         end
 
         cbblock = args.pop if Proc === args.last
-        @target_event_loop._external_object_call(@object, method, @name, args, block, cbblock, @event_loop, call_context)
+        @target_event_loop._external_object_call(@object, method, @name, args, kwargs, block, cbblock, @event_loop, call_context)
       else
         # called externally
         raise InvalidAccess, "external object #{self.inspect} #{"wrapped by #{name} " if name} can not be called in a different eventbox instance"

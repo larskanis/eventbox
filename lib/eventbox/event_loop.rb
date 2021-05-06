@@ -152,21 +152,23 @@ class Eventbox
       @latest_answer_queue = orig_context
     end
 
-    def async_call(box, name, args, block, wrapper)
+    def async_call(box, name, args, kwargs, block, wrapper)
       with_call_frame(name, nil) do |source_event_loop|
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
-        box.send("__#{name}__", *args, &block)
+        box.send("__#{name}__", *args, **kwargs, &block)
       end
     end
 
-    def sync_call(box, name, args, block, answer_queue, wrapper)
+    def sync_call(box, name, args, kwargs, block, answer_queue, wrapper)
       with_call_frame(name, answer_queue) do |source_event_loop|
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
-        res = box.send("__#{name}__", *args, &block)
+        res = box.send("__#{name}__", *args, **kwargs, &block)
         res = Sanitizer.sanitize_value(res, self, source_event_loop)
         answer_queue << res
       end
@@ -175,31 +177,33 @@ class Eventbox
     def yield_call(box, name, args, kwargs, block, answer_queue, wrapper)
       with_call_frame(name, answer_queue) do |source_event_loop|
         args << new_completion_proc(answer_queue, name, source_event_loop)
-        args << kwargs unless kwargs.empty?
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self, name)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self, name)
         block = Sanitizer.sanitize_value(block, source_event_loop, self, name)
-        box.send("__#{name}__", *args, &block)
+        box.send("__#{name}__", *args, **kwargs, &block)
       end
     end
 
     # Anonymous version of async_call
-    def async_proc_call(pr, args, arg_block, wrapper)
+    def async_proc_call(pr, args, kwargs, arg_block, wrapper)
       with_call_frame(AsyncProc, nil) do |source_event_loop|
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
-        pr.yield(*args, &arg_block)
+        pr.yield(*args, **kwargs, &arg_block)
       end
     end
 
     # Anonymous version of sync_call
-    def sync_proc_call(pr, args, arg_block, answer_queue, wrapper)
+    def sync_proc_call(pr, args, kwargs, arg_block, answer_queue, wrapper)
       with_call_frame(SyncProc, answer_queue) do |source_event_loop|
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
-        res = pr.yield(*args, &arg_block)
+        res = pr.yield(*args, **kwargs, &arg_block)
         res = Sanitizer.sanitize_value(res, self, source_event_loop)
         answer_queue << res
       end
@@ -209,11 +213,11 @@ class Eventbox
     def yield_proc_call(pr, args, kwargs, arg_block, answer_queue, wrapper)
       with_call_frame(YieldProc, answer_queue) do |source_event_loop|
         args << new_completion_proc(answer_queue, pr, source_event_loop)
-        args << kwargs unless kwargs.empty?
-        args = wrapper.call(source_event_loop, self, *args) if wrapper
+        args, kwargs = wrapper.call(source_event_loop, self, *args, **kwargs) if wrapper
         args = Sanitizer.sanitize_values(args, source_event_loop, self)
+        kwargs = Sanitizer.sanitize_kwargs(kwargs, source_event_loop, self)
         arg_block = Sanitizer.sanitize_value(arg_block, source_event_loop, self)
-        pr.yield(*args, &arg_block)
+        pr.yield(*args, **kwargs, &arg_block)
       end
     end
 
@@ -234,13 +238,13 @@ class Eventbox
     def new_async_proc(name=nil, klass=AsyncProc, &block)
       raise InvalidAccess, "async_proc outside of the event scope is not allowed" unless event_scope?
       wrapper = ArgumentWrapper.build(block, "async_proc #{name}")
-      pr = klass.new do |*args, &arg_block|
+      pr = klass.new do |*args, **kwargs, &arg_block|
         if event_scope?
           # called in the event scope
-          block.yield(*args, &arg_block)
+          block.yield(*args, **kwargs, &arg_block)
         else
           # called externally
-          async_proc_call(block, args, arg_block, wrapper)
+          async_proc_call(block, args, kwargs, arg_block, wrapper)
         end
         pr
       end
@@ -249,14 +253,14 @@ class Eventbox
     def new_sync_proc(name=nil, &block)
       raise InvalidAccess, "sync_proc outside of the event scope is not allowed" unless event_scope?
       wrapper = ArgumentWrapper.build(block, "sync_proc #{name}")
-      SyncProc.new do |*args, &arg_block|
+      SyncProc.new do |*args, **kwargs, &arg_block|
         if event_scope?
           # called in the event scope
-          block.yield(*args, &arg_block)
+          block.yield(*args, **kwargs, &arg_block)
         else
           # called externally
           answer_queue = Queue.new
-          sel = sync_proc_call(block, args, arg_block, answer_queue, wrapper)
+          sel = sync_proc_call(block, args, kwargs, arg_block, answer_queue, wrapper)
           callback_loop(answer_queue, sel, block)
         end
       end
@@ -269,8 +273,7 @@ class Eventbox
         if event_scope?
           # called in the event scope
           internal_yield_result(args, block)
-          args << kwargs unless kwargs.empty?
-          block.yield(*args, &arg_block)
+          block.yield(*args, **kwargs, &arg_block)
           nil
         else
           # called externally
@@ -388,7 +391,7 @@ class Eventbox
       end
     end
 
-    class ExternalObjectCall < Struct.new :object, :method, :args, :arg_block, :cbresult
+    class ExternalObjectCall < Struct.new :object, :method, :args, :kwargs, :arg_block, :cbresult
       def proc?
         Proc === object
       end
@@ -398,15 +401,16 @@ class Eventbox
       end
     end
 
-    def _external_object_call(object, method, name, args, arg_block, cbresult, source_event_loop, call_context)
+    def _external_object_call(object, method, name, args, kwargs, arg_block, cbresult, source_event_loop, call_context)
 # TODO: Implement €-wrapping on call results
 #       if cbresult
 #         wrapper = ArgumentWrapper.build(cbresult, name)
 #         args = wrapper.call(self, source_event_loop, *args)
 #       end
       args = Sanitizer.sanitize_values(args, self, source_event_loop)
+      kwargs = Sanitizer.sanitize_kwargs(kwargs, self, source_event_loop)
       arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
-      cb = ExternalObjectCall.new(object, method, args, arg_block, cbresult)
+      cb = ExternalObjectCall.new(object, method, args, kwargs, arg_block, cbresult)
 
       if call_context
         # explicit call_context given

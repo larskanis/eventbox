@@ -91,7 +91,7 @@ class Eventbox
   # Create a new {Eventbox} instance.
   #
   # All arguments are passed to the init() method when defined.
-  def initialize(*args, &block)
+  def initialize(*args, **kwargs, &block)
     options = self.class.eventbox_options
 
     # This instance variable is set to self here, but replaced by Boxable#action to a WeakRef
@@ -121,7 +121,7 @@ class Eventbox
     @__event_loop__ = EventLoop.new(options[:threadpool], options[:guard_time])
     ObjectSpace.define_finalizer(self, @__event_loop__.method(:send_shutdown))
 
-    init(*args, &block)
+    init(*args, **kwargs, &block)
   end
 
   def self.method_added(name)

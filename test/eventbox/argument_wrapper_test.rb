@@ -2,12 +2,12 @@ require_relative "../test_helper"
 
 class EventboxArgumentWrapperTest < Minitest::Test
 
-  [[:sync_call, "check.call(eb.sc(*args))", ":sc"],
-   [:sync_proc, "check.call(eb.sp.call(*args))", '"sync_proc'],
-   [:async_call, "eb.ac(*args); check.call(eb.async_res)", ":ac"],
-   [:async_proc, "eb.ap.call(*args); check.call(eb.async_res)", '"async_proc'],
-   [:yield_call, "check.call(eb.yc(*args))", ":yc"],
-   [:yield_proc, "check.call(eb.yp.call(*args))", '"yield_proc'],
+  [[:sync_call, "check.call(eb.sc(*args, **kwargs))", ":sc"],
+   [:sync_proc, "check.call(eb.sp.call(*args, **kwargs))", '"sync_proc'],
+   [:async_call, "eb.ac(*args, **kwargs); check.call(eb.async_res)", ":ac"],
+   [:async_proc, "eb.ap.call(*args, **kwargs); check.call(eb.async_res)", '"async_proc'],
+   [:yield_call, "check.call(eb.yc(*args, **kwargs))", ":yc"],
+   [:yield_proc, "check.call(eb.yp.call(*args, **kwargs))", '"yield_proc'],
   ].each do |call_type, code, name|
     ["", "_bl"].each do |bn|
       code2 = bn.empty? ? code : code.gsub(/args\)/, "args){}")
@@ -22,7 +22,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
   end
 
   # Avoid "warning: assigned but unused variable - eb", etc
-  def eval_code(eb, check, args, code)
+  def eval_code(eb, check, args, kwargs, code)
     eval(code)
   end
 
@@ -43,7 +43,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
         assert_equal Eventbox::ExternalProc, res[6]
       end
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, args, {}, code)
   end
 
   def wrap_arguments_without_rest(call_type, code, name, bl)
@@ -61,7 +61,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
         assert_equal Eventbox::ExternalProc, res[4]
       end
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, args, {}, code)
   end
 
   class WrapArguments < Eventbox
@@ -106,7 +106,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
       assert_equal Eventbox::ExternalObject, res[6]
       assert_match(/@object=:O3 @name=:€c/, res[7])
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, args, {}, code)
   end
 
   def wrap_default_arguments_unset(call_type, code, name)
@@ -121,7 +121,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
       assert_equal Eventbox::ExternalObject, res[4]
       assert_match(/@object=:O3 @name=:€c/, res[5])
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, args, {}, code)
   end
 
   class WrapDefaultArguments < Eventbox
@@ -154,7 +154,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
 
   def wrap_keyword_arguments_set(call_type, code, name)
     eb = WrapKeywordArguments.new
-    args = [€a: :A, b: :B, €c: :C, d: :D, g: :G, h: :H]
+    kwargs = {€a: :A, b: :B, €c: :C, d: :D, g: :G, h: :H}
     check = proc do |res|
       assert_equal 10, res.size
       assert_equal Eventbox::ExternalObject, res[0]
@@ -168,12 +168,12 @@ class EventboxArgumentWrapperTest < Minitest::Test
       assert_equal [:g, Eventbox::ExternalObject], res[8]
       assert_equal [:h, Eventbox::ExternalObject], res[9]
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, [], kwargs, code)
   end
 
   def wrap_keyword_arguments_unset(call_type, code, name)
     eb = WrapKeywordArguments.new
-    args = [€a: :A1, d: :D1]
+    kwargs = {€a: :A1, d: :D1}
     check = proc do |res|
       assert_equal 8, res.size
       assert_equal Eventbox::ExternalObject, res[0]
@@ -185,7 +185,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
       assert_equal Symbol, res[6]
       assert_equal ":D1", res[7]
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, [], kwargs, code)
   end
 
   class WrapKeywordArguments < Eventbox
@@ -218,7 +218,8 @@ class EventboxArgumentWrapperTest < Minitest::Test
 
   def wrap_position_and_keyword_arguments(call_type, code, name)
     eb = WrapPositionalAndKeywordArguments.new
-    args = [:A, :B, g: :G, h: :H]
+    args = [:A, :B]
+    kwargs = {g: :G, h: :H}
     check = proc do |res|
       assert_equal 6, res.size
       assert_equal Eventbox::ExternalObject, res[0]
@@ -228,7 +229,7 @@ class EventboxArgumentWrapperTest < Minitest::Test
       assert_equal [:g, Symbol], res[4]
       assert_equal [:h, Symbol], res[5]
     end
-    eval_code(eb, check, args, code)
+    eval_code(eb, check, args, kwargs, code)
   end
 
   class WrapPositionalAndKeywordArguments < Eventbox
