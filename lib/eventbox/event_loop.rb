@@ -146,6 +146,7 @@ class Eventbox
 
     def with_call_context(ctx)
       orig_context = @latest_answer_queue
+      raise ArgumentError, "invalid argument #{ctx.inspect} instead of Eventbox::CallContext" unless CallContext === ctx
       @latest_answer_queue = ctx.__answer_queue__
       yield
     ensure
