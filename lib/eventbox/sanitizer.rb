@@ -312,11 +312,13 @@ class Eventbox
     # It can be called within {Eventbox::Boxable#sync_call sync_call} and {Eventbox::Boxable#yield_call yield_call} methods and from {Eventbox#sync_proc} and {Eventbox#yield_proc} closures.
     # The method then runs in the background on the thread that called the event scope method in execution.
     #
-    # TODO: It's also possible to invoke it within a {Eventbox::Boxable#async_call async_call} or {Eventbox#async_proc}, when the method or proc that brought the external object into the event scope, is a yield call that didn't return yet.
-    # In this case the method runs in the background on the thread that is waiting for the yield call to return.
+    # It's also possible to invoke the external object with an explicit {Eventbox::CallContext} instead of the implicit call context of a sync or yield call.
+    # The explicit {Eventbox::CallContext} must be given as the very first parameter and it is not passed to the object call.
+    # The object call is then done in the given context of an arbitrary event scope method or closure that didn't return yet.
+    # In this case the method runs in the background on the thread that is waiting for the call to return.
     #
-    # If the call to the external object doesn't return immediately, it blocks the calling thread.
-    # If this is not desired, an {Eventbox::Boxable#action action} can be used instead, to invoke the method.
+    # If the call to the external object doesn't return immediately, it blocks the calling thread or the thread of the {Eventbox::CallContext}.
+    # If this is not desired, an {Eventbox::Boxable#action action} can be used instead, to invoke the method of the object on a dedicated thread.
     # However in any case calling the external object doesn't block the Eventbox instance itself.
     # It still keeps responsive to calls from other threads.
     #

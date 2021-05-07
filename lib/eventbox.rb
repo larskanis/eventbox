@@ -286,7 +286,7 @@ class Eventbox
   # @returns [ActionCallContext]  The current call context.
   #   Returns +nil+ in async_call or async_proc context.
   #
-  # Usabel as first parameter to {ExternalProc.call} and {ExternalObject.send}.
+  # Usable as first parameter to {ExternalProc.call} and {ExternalObject.send}.
   private def call_context
     if @__event_loop__.event_scope?
       @__event_loop__._latest_call_context

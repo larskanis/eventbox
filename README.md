@@ -203,7 +203,7 @@ In this case the object to be called should be thread-safe.
 See also [What is safe and what isn't?](#eventbox-safety) below.
 
 External objects can also be called from event scope per {Eventbox::ExternalObject#send}, but with some restrictions.
-The same restrictions applies to external closures too, which are callable from event scope per {Eventbox::ExternalProc#call}.
+The same restrictions apply to external closures too, which are callable from event scope per {Eventbox::ExternalProc#call}.
 
 
 ## Block and Proc types
