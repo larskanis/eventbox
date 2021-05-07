@@ -127,22 +127,24 @@ class Eventbox
     end
 
     # Threadsafe write access to instance variables.
-    def attr_writer(name)
-      async_call(define_method("#{name}=") do |value|
-        instance_variable_set("@#{name}", value)
-      end)
+    def attr_writer(*names)
+      super
+      names.each do |name|
+        async_call(:"#{name}=")
+      end
     end
 
     # Threadsafe read access to instance variables.
-    def attr_reader(name)
-      sync_call(define_method("#{name}") do
-        instance_variable_get("@#{name}")
-      end)
+    def attr_reader(*names)
+      super
+      names.each do |name|
+        sync_call(:"#{name}")
+      end
     end
 
     # Threadsafe read and write access to instance variables.
     #
-    # Attention: Be careful with read-modify-write operations - they are *not* atomic but are executed as two independent operations.
+    # Attention: Be careful with read-modify-write operations like "+=" - they are *not* atomic but are executed as two independent operations.
     #
     # This will lose counter increments, since +counter+ is incremented in a non-atomic manner:
     #   attr_accessor :counter
@@ -163,9 +165,12 @@ class Eventbox
     #   async_call def increment(by)
     #     @counter += by
     #   end
-    def attr_accessor(name)
-      attr_reader name
-      attr_writer name
+    def attr_accessor(*names)
+      super
+      names.each do |name|
+        async_call(:"#{name}=")
+        sync_call(:"#{name}")
+      end
     end
 
     # Define a private method for asynchronous execution.
