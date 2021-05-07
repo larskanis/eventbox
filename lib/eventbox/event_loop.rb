@@ -221,16 +221,11 @@ class Eventbox
       end
     end
 
-    # Called when an external proc finished
-    def external_proc_result(cbresult, res)
-      with_call_frame(ExternalProc, nil) do
-        cbresult.yield(*res)
-      end
-    end
-
     # Called when an external object call finished
-    def external_call_result(cbresult, name, res)
-      with_call_frame(ExternalObject, name) do
+    def external_call_result(cbresult, res, answer_queue, wrapper)
+      with_call_frame(ExternalObject, answer_queue) do |source_event_loop|
+        res, _ = wrapper.call(source_event_loop, self, res) if wrapper
+        res = Sanitizer.sanitize_value(res, source_event_loop, self)
         cbresult.yield(*res)
       end
     end
@@ -332,11 +327,10 @@ class Eventbox
         rets = answer_queue.deq
         case rets
         when ExternalObjectCall
-          cbres = rets.object.send(rets.method, *rets.args, &rets.arg_block)
+          cbres = rets.object.send(rets.method, *rets.args, **rets.kwargs, &rets.arg_block)
 
           if rets.cbresult
-            cbres = Sanitizer.sanitize_value(cbres, source_event_loop, self)
-            external_call_result(rets.cbresult, rets.method, cbres)
+            external_call_result(rets.cbresult, cbres, answer_queue, rets.result_wrapper)
           end
         when WrappedException
           close_answer_queue(answer_queue, name)
@@ -391,7 +385,7 @@ class Eventbox
       end
     end
 
-    class ExternalObjectCall < Struct.new :object, :method, :args, :kwargs, :arg_block, :cbresult
+    class ExternalObjectCall < Struct.new :object, :method, :args, :kwargs, :arg_block, :cbresult, :result_wrapper
       def proc?
         Proc === object
       end
@@ -402,15 +396,11 @@ class Eventbox
     end
 
     def _external_object_call(object, method, name, args, kwargs, arg_block, cbresult, source_event_loop, call_context)
-# TODO: Implement €-wrapping on call results
-#       if cbresult
-#         wrapper = ArgumentWrapper.build(cbresult, name)
-#         args = wrapper.call(self, source_event_loop, *args)
-#       end
+      result_wrapper = ArgumentWrapper.build(cbresult, name) if cbresult
       args = Sanitizer.sanitize_values(args, self, source_event_loop)
       kwargs = Sanitizer.sanitize_kwargs(kwargs, self, source_event_loop)
       arg_block = Sanitizer.sanitize_value(arg_block, self, source_event_loop)
-      cb = ExternalObjectCall.new(object, method, args, kwargs, arg_block, cbresult)
+      cb = ExternalObjectCall.new(object, method, args, kwargs, arg_block, cbresult, result_wrapper)
 
       if call_context
         # explicit call_context given

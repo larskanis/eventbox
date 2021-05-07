@@ -482,7 +482,7 @@ class EventboxCallTest < Minitest::Test
     n, ext_obj2, ext_obj2_klass, ext_obj, ext_obj_klass, int_obj = fc.go(pr, IO.pipe[0])
     assert_equal 6, n
     assert_equal IO, ext_obj2.class
-    assert_equal Eventbox::WrappedObject, ext_obj2_klass
+    assert_equal Eventbox::ExternalObject, ext_obj2_klass
     assert_equal IO, ext_obj.class
     assert_equal Eventbox::ExternalObject, ext_obj_klass
     assert_equal Eventbox::WrappedObject, int_obj.class
