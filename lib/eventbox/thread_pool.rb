@@ -168,5 +168,9 @@ class Eventbox
     private async_call def gc_finished
       @run_gc_when_busy = true
     end
+
+    def inspect
+      "#<#{self.class}:#{self.object_id} @requests=#{@requests.length} @jobless=#{@jobless.length} @run_gc_when_busy=#{@run_gc_when_busy.inspect}>"
+    end
   end
 end

@@ -71,6 +71,10 @@ class Eventbox
       nil
     end
 
+    def inspect
+      "#<#{self.class}:#{self.object_id} @threadpool=#{@threadpool.inspect}, @shutdown=#{@shutdown.inspect}, @guard_time=#{@guard_time.inspect}, @running_actions=#{@running_actions.length}>"
+    end
+
     def shutdown(&completion_block)
       send_shutdown
       if event_scope?
