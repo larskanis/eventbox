@@ -441,7 +441,12 @@ class Eventbox
               end
             end
           rescue AbortAction
-            # Do nothing, just exit the action
+            if @threadpool == Thread
+              # running on plain Thread -> do nothing, just exit the action
+            else
+              # running on a threadpool -> let the threadpool handle the exception
+              raise
+            end
           rescue WeakRef::RefError
             # It can happen that the GC already swept the Eventbox instance, before some instance action is in a blocking state.
             # In this case access to the Eventbox instance raises a RefError.
