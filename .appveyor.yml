@@ -2,7 +2,7 @@ build: off
 
 init:
   - set PATH=C:/Ruby%ruby_version%/bin;%PATH%
-  - set RUBYOPT=--verbose -Eutf-8 --enable-frozen-string-literal
+  - set RUBYOPT=--verbose --enable-frozen-string-literal
 
 install:
   - ps: |
@@ -24,5 +24,5 @@ environment:
       RUBYDOWNLOAD: x64
     - ruby_version: "head"
       RUBYDOWNLOAD: x86
-    - ruby_version: "24-x64"
-    - ruby_version: "24"
+    - ruby_version: "30-x64"
+    - ruby_version: "30"
