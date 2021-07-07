@@ -273,7 +273,6 @@ class Eventbox
     # If {raise} is called within the action ({#current?} returns +true+), all exceptions are delivered immediately.
     # This happens regardless of the current interrupt mask set by +Thread.handle_interrupt+.
     def raise(*args)
-      # ignore raise, if sent from the action thread
       if AbortAction === args[0] || (Module === args[0] && args[0].ancestors.include?(AbortAction))
         ::Kernel.raise InvalidAccess, "Use of Eventbox::AbortAction is not allowed - use Action#abort or a custom exception subclass"
       end
