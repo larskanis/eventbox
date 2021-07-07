@@ -432,28 +432,27 @@ class Eventbox
 
       new_thread = Thread.handle_interrupt(Exception => :never) do
         @threadpool.new do
+          ac = nil
           begin
             Thread.handle_interrupt(AbortAction => :on_blocking) do
               if meth.arity == args.length
                 meth.call(*args, &block)
               else
-                meth.call(*args, qu.deq, &block)
+                ac ||= qu.deq
+                meth.call(*args, ac, &block)
               end
             end
           rescue AbortAction
-            if @threadpool == Thread
-              # running on plain Thread -> do nothing, just exit the action
-            else
-              # running on a threadpool -> let the threadpool handle the exception
-              raise
-            end
+            ac ||= qu.deq
+            ac.terminate
           rescue WeakRef::RefError
             # It can happen that the GC already swept the Eventbox instance, before some instance action is in a blocking state.
             # In this case access to the Eventbox instance raises a RefError.
             # Since it's now impossible to execute the action up to a blocking state, abort the action prematurely.
             raise unless @shutdown
           ensure
-            thread_finished(qu.deq)
+            ac ||= qu.deq
+            thread_finished(ac)
           end
         end
       end
@@ -466,8 +465,8 @@ class Eventbox
         _update_action_threads_for_gc
       end
 
-      # Enqueue the action twice (for call and for finish)
-      qu << a << a
+      # Enqueue the action for passing as action parameter
+      qu << a
 
       # @shutdown is set without a lock, so that we need to re-check, if it was set while start_action
       if @shutdown

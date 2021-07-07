@@ -297,5 +297,10 @@ class Eventbox
     def join
       @thread.join
     end
+
+    # @private
+    def terminate
+      @thread.terminate
+    end
   end
 end

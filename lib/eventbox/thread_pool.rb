@@ -68,6 +68,10 @@ class Eventbox
         end
       end
 
+      async_call def terminate
+        @action.abort
+      end
+
       # @private
       async_call def __start__(action, input)
         # Send the block to the start_pool_thread as result of next_job
