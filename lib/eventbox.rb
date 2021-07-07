@@ -275,6 +275,8 @@ class Eventbox
   # Starts a new action dedicated to call external objects.
   #
   # It returns a {CallContext} which can be used with {Eventbox::ExternalObject#send} and {Eventbox::ExternalProc#call}.
+  #
+  # @returns [ActionCallContext]  A new call context provided by a newly started action.
   private def new_action_call_context
     ActionCallContext.new(@__event_loop__)
   end
@@ -283,7 +285,7 @@ class Eventbox
   #
   # Callable within the event scope only.
   #
-  # @returns [ActionCallContext]  The current call context.
+  # @returns [BlockingExternalCallContext]  The current call context.
   #   Returns +nil+ in async_call or async_proc context.
   #
   # Usable as first parameter to {ExternalProc.call} and {ExternalObject.send}.
