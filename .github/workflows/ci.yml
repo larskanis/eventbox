@@ -1,0 +1,46 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  job_test:
+    name: CI
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            ruby: "head"
+          - os: ubuntu
+            ruby: "head"
+          - os: ubuntu
+            ruby: "3.2"
+          - os: ubuntu
+            ruby: "3.0"
+          - os: ubuntu
+            ruby: "truffleruby"
+            NO_TIMING_TESTS: true
+          - os: ubuntu
+            ruby: "jruby"
+          - os: macos
+            ruby: "head"
+            NO_TIMING_TESTS: true
+
+    runs-on: ${{ matrix.os }}-latest
+    env:
+      NO_TIMING_TESTS: ${{ matrix.NO_TIMING_TESTS }}
+
+    steps:
+
+      - uses: actions/checkout@v2
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - run: bundle install
+
+      - name: Run tests
+        env:
+          RUBYOPT: --verbose --enable-frozen-string-literal
+        run: bundle exec rake test TESTOPTS=-v
