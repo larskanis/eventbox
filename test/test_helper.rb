@@ -12,6 +12,11 @@ END {
   sleep 0.1 if (Thread.list - @start_threads).any?
 
   lingering = Thread.list - @start_threads
+  lingering.reject! do |th|
+    # ignore the single thread, that the timeout library creates at it's first use
+    th.backtrace&.first.to_s =~ /timeout-.*\/lib\/timeout.rb:\d+:in `sleep'/
+  end
+
   if lingering.any?
     warn "Warning: #{lingering.length} lingering threads"
     lingering.each do |th|
