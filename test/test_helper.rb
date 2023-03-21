@@ -1,6 +1,7 @@
-require 'simplecov'
-SimpleCov.start
-
+unless "truffleruby" == RUBY_ENGINE
+  require 'simplecov'
+  SimpleCov.start
+end
 
 BEGIN {
   @start_threads = Thread.list
