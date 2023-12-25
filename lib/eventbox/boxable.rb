@@ -51,7 +51,7 @@ class Eventbox
         if @__event_loop__.event_scope?
           # Use the correct method within the class hierarchy, instead of just self.send(*args).
           # Otherwise super() would start an infinite recursion.
-          unbound_method.bind(eventbox).call(*args, **kwargs, &cb)
+          unbound_method.bind_call(eventbox, *args, **kwargs, &cb)
         else
           @__event_loop__.async_call(eventbox, name, args, kwargs, cb, wrapper)
         end
@@ -79,7 +79,7 @@ class Eventbox
       wrapper = ArgumentWrapper.build(unbound_method, name)
       with_block_or_def(name, block) do |*args, **kwargs, &cb|
         if @__event_loop__.event_scope?
-          unbound_method.bind(eventbox).call(*args, **kwargs, &cb)
+          unbound_method.bind_call(eventbox, *args, **kwargs, &cb)
         else
           answer_queue = Queue.new
           sel = @__event_loop__.sync_call(eventbox, name, args, kwargs, cb, answer_queue, wrapper)
