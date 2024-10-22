@@ -1,5 +1,5 @@
-[![Build Status Linux](https://travis-ci.com/larskanis/eventbox.svg?branch=master)](https://travis-ci.com/larskanis/eventbox)
-[![Build status Windows](https://ci.appveyor.com/api/projects/status/tq397g0gfke1mcud/branch/master?svg=true)](https://ci.appveyor.com/project/larskanis/eventbox/branch/master)
+[![CI](https://github.com/larskanis/eventbox/actions/workflows/ci.yml/badge.svg)](https://github.com/larskanis/eventbox/actions/workflows/ci.yml)
+[![CI status Windows](https://ci.appveyor.com/api/projects/status/tq397g0gfke1mcud/branch/master?svg=true)](https://ci.appveyor.com/project/larskanis/eventbox/branch/master)
 
 # Eventbox
 
