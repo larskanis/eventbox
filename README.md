@@ -22,7 +22,7 @@ An important task of Eventbox is to avoid race conditions through shared data.
 Such data races between event scope and external/action scope are avoided through **{Eventbox::Sanitizer filters} applied to all inputs and outputs**.
 That way {Eventbox} guarantees stable states while event processing without a need for any locks.
 
-* [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master)
+* [API documentation](https://www.rubydoc.info/gems/eventbox)
 
 
 ## Requirements
@@ -85,7 +85,7 @@ end
 <a name="my_queue_image"></a>
 A picture describes it best:
 
-[![MyQueue calls](https://raw.github.com/larskanis/eventbox/master/docs/images/my_queue_calls.svg?sanitize=true)](https://www.rubydoc.info/github/larskanis/eventbox/master/file/README.md#my_queue_image)
+[![MyQueue calls](https://raw.github.com/larskanis/eventbox/master/docs/images/my_queue_calls.svg?sanitize=true)](https://www.rubydoc.info/gems/eventbox/file/README.md#my_queue_image)
 {include:file:docs/my_queue_calls_github.md}
 
 Although there are no mutex or condition variables in use, the implementation is thread-safe.
@@ -134,7 +134,7 @@ It is recommended to work them through, in order to fully understand how Eventbo
 * {file:docs/server.md TCP server} - Understand how to startup and shutdown blocking actions and to combine several Eventbox classes to handle parallel connections.
 * {file:docs/threadpool.md Thread-pool} - Understand how parallel external requests can be serialized and scheduled.
 
-Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/gems/eventbox).
 
 
 ## Method types
@@ -169,7 +169,7 @@ They allow thread-safe access to instance variables.
 Beside {Eventbox.async_call async_call}, {Eventbox.sync_call sync_call} and {Eventbox.yield_call yield_call} methods it's possible to define plain `private` methods, since they are not accessible externally.
 However any plain `public` or `protected` methods within Eventbox classes are rejected.
 
-Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/github/larskanis/eventbox/master).
+Seeing curly braces instead of links? Switch to the [API documentation](https://www.rubydoc.info/gems/eventbox).
 
 ### Action Scope
 

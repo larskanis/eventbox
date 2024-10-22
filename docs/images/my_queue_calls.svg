@@ -292,7 +292,7 @@
        id="a1025"
        target=""
        transform="translate(-0.555625,-23.151042)"
-       xlink:href="https://www.rubydoc.info/github/larskanis/eventbox/master/Eventbox/Sanitizer">
+       xlink:href="https://www.rubydoc.info/gems/eventbox/Eventbox/Sanitizer">
       <ellipse
          onclick=""
          transform="matrix(0.89625618,-0.44353677,0.47919017,0.8777111,0,0)"
@@ -314,7 +314,7 @@
        transform="translate(0,6.2970833)"
        id="a4631">
       <path
-         onclick="https://www.rubydoc.info/github/larskanis/eventbox/master/Eventbox/Sanitizer"
+         onclick="https://www.rubydoc.info/gems/eventbox/Eventbox/Sanitizer"
          sodipodi:open="true"
          transform="matrix(0.92881568,0.37054207,-0.47054194,0.88237763,0,0)"
          d="m 114.76537,172.63952 a 5.2028461,8.8422928 0 0 1 -3.99824,-10.43402 5.2028461,8.8422928 0 0 1 6.10517,-6.88361 5.2028461,8.8422928 0 0 1 4.10216,10.31685 5.2028461,8.8422928 0 0 1 -6.03535,7.05921"
@@ -334,7 +334,7 @@
        id="a925"
        target="">
       <path
-         onclick="https://www.rubydoc.info/github/larskanis/eventbox/master/Eventbox/Sanitizer"
+         onclick="https://www.rubydoc.info/gems/eventbox/Eventbox/Sanitizer"
          sodipodi:open="true"
          transform="matrix(0.8488041,0.52870748,-0.64396364,0.7650561,0,0)"
          d="m 247.74739,159.80509 a 4.7844305,9.6128368 0 0 1 -4.70978,9.68959 4.7844305,9.6128368 0 0 1 -4.85765,-9.39028 4.7844305,9.6128368 0 0 1 4.63728,-9.82976 4.7844305,9.6128368 0 0 1 4.92686,9.24357"
