@@ -72,7 +72,7 @@ class EventboxSanitizerTest < Minitest::Test
     io = ios.first
     assert_equal Eventbox::WrappedObject, io.class
     ex = assert_raises(NoMethodError){ ios.first.close }
-    assert_match(/`close'/, ex.to_s)
+    assert_match(/[`']close'/, ex.to_s)
   end
 
   class TestObject
