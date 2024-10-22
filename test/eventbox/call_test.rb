@@ -29,7 +29,7 @@ class EventboxCallTest < Minitest::Test
         end
       end.new
     end
-    assert_match(/method `test' at/, err.to_s)
+    assert_match(/method [`']test' at/, err.to_s)
   end
 
   def test_yield_method_without_yielder
@@ -58,7 +58,7 @@ class EventboxCallTest < Minitest::Test
         end
       end.new
     end
-    assert_match(/method `initialize' at/, err.to_s)
+    assert_match(/method [`']initialize' at/, err.to_s)
   end
 
   def test_initialize_method_error_without_super
@@ -80,7 +80,7 @@ class EventboxCallTest < Minitest::Test
       end.new
 
       err = assert_raises(NoMethodError) { eb.init }
-      assert_match(/private method `init' called/, err.to_s)
+      assert_match(/private method [`']init' called/, err.to_s)
     end
   end
 
@@ -184,7 +184,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     ex = assert_raises(Eventbox::MultipleResults) { eb.new }
-    assert_match(/second result yielded for method `y'/, ex.to_s)
+    assert_match(/second result yielded for method [`']y'/, ex.to_s)
   end
 
   def test_intern_yield_call_without_proc
@@ -197,7 +197,7 @@ class EventboxCallTest < Minitest::Test
     end
 
     ex = assert_raises(Eventbox::InvalidAccess) { eb.new }
-    assert_match(/`y' must be called with a Proc object/, ex.to_s)
+    assert_match(/[`']y' must be called with a Proc object/, ex.to_s)
   end
 
   def test_intern_yield_call_results_self
@@ -227,7 +227,7 @@ class EventboxCallTest < Minitest::Test
       end.new
 
       ex = assert_raises(Eventbox::MultipleResults) { eb.doit; eb.trigger }
-      assert_match(/second result yielded for method `doit'/, ex.to_s)
+      assert_match(/second result yielded for method [`']doit'/, ex.to_s)
     end
   end
 
@@ -498,7 +498,7 @@ class EventboxCallTest < Minitest::Test
     with_report_on_exception(false) do
       pr = IO.pipe
       ex = assert_raises(NoMethodError){ fc.new(pr) }
-      assert_match(/`call'/, ex.to_s)
+      assert_match(/[`']call'/, ex.to_s)
     end
   end
 
@@ -588,7 +588,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = fc.pr
     err = assert_raises(Eventbox::InvalidAccess){ pr.call { } }
-    assert_match(/closure was called by `Eventbox::AsyncProc'/, err.to_s)
+    assert_match(/closure was called by [`']Eventbox::AsyncProc'/, err.to_s)
   end
 
   def test_sync_proc_called_externally_with_completion_block
@@ -714,7 +714,7 @@ class EventboxCallTest < Minitest::Test
 
     pr = fc.pr
     ex = assert_raises(NoMethodError){ pr.call }
-    assert_match(/`call'/, ex.to_s)
+    assert_match(/[`']call'/, ex.to_s)
   end
 
   class Yielder2 < Eventbox
@@ -748,7 +748,7 @@ class EventboxCallTest < Minitest::Test
     end.new { }
 
     err = assert_raises(Eventbox::InvalidAccess){ fc.go }
-    assert_match(/closure defined by `init' was called by `go'/, err.to_s)
+    assert_match(/closure defined by [`']init' was called by [`']go'/, err.to_s)
   end
 
   def test_external_block_called_by_async_call
@@ -879,7 +879,7 @@ class EventboxCallTest < Minitest::Test
     eb = ec.new {}
     with_report_on_exception(false) do
       err = assert_raises(Eventbox::InvalidAccess) { eb.go1 }
-      assert_match(/closure defined by `init' was called .* already returned/, err.to_s)
+      assert_match(/closure defined by [`']init' was called .* already returned/, err.to_s)
     end
   end
 
@@ -892,7 +892,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     err = assert_raises(Eventbox::InvalidAccess) { eb.value{} }
-    assert_match(/closure can't be called through method `value'/, err.to_s)
+    assert_match(/closure can't be called through method [`']value'/, err.to_s)
   end
 
   def test_external_object_called_after_yield_result
@@ -904,7 +904,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     err = assert_raises(Eventbox::InvalidAccess) { eb.value("4") }
-    assert_match(/method `to_i' can't be called through method `value'/, err.to_s)
+    assert_match(/method [`']to_i' can't be called through method [`']value'/, err.to_s)
   end
 
   def test_external_block_called_after_raise_result
@@ -932,7 +932,7 @@ class EventboxCallTest < Minitest::Test
     end.new
 
     err = assert_raises(Eventbox::InvalidAccess) { eb.raising_proc.call("4") }
-    assert_match(/method `to_i' can't be called through .*call_test\.rb/, err.to_s)
+    assert_match(/method [`']to_i' can't be called through .*call_test\.rb/, err.to_s)
   end
 
   def test_external_async_call_with_deferred_callback

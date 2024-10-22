@@ -575,7 +575,7 @@ def test_action_call_is_private
   end.new
 
   err = assert_raises(NoMethodError) { eb.a }
-  assert_match(/private method `a' called/, err.to_s)
+  assert_match(/private method [`']a' called/, err.to_s)
 end
 
 def test_sync_proc_in_action
