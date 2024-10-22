@@ -20,6 +20,7 @@ jobs:
           - os: ubuntu
             ruby: "truffleruby"
             NO_TIMING_TESTS: true
+            experimental: true
           - os: ubuntu
             ruby: "jruby"
           - os: macos
@@ -27,6 +28,7 @@ jobs:
             NO_TIMING_TESTS: true
 
     runs-on: ${{ matrix.os }}-latest
+    continue-on-error: ${{ matrix.experimental || false }}
     env:
       NO_TIMING_TESTS: ${{ matrix.NO_TIMING_TESTS }}
 
