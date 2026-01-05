@@ -8,7 +8,7 @@ class EventboxSanitizerTest < Minitest::Test
       end
     end.new
 
-    err = assert_raises(Eventbox::InvalidAccess) { eb.go(eb.shared_object("mutable")) }
+    err = assert_raises(Eventbox::InvalidAccess) { eb.go(eb.shared_object(+"mutable")) }
     assert_match(/not taggable/, err.to_s)
   end
 
