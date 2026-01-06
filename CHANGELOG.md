@@ -1,3 +1,11 @@
+1.0.1 / 2026-01-06
+-------------------
+
+Changed:
+* Requires ruby-3.2 or newer.
+* Use bind_call instead of bind.call . #9
+
+
 1.0.0 / 2021-07-07
 -------------------
 
