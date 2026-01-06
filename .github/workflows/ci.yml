@@ -14,9 +14,9 @@ jobs:
           - os: ubuntu
             ruby: "head"
           - os: ubuntu
-            ruby: "3.2"
+            ruby: "4.0"
           - os: ubuntu
-            ruby: "3.0"
+            ruby: "3.2"
           - os: ubuntu
             ruby: "truffleruby"
             NO_TIMING_TESTS: true

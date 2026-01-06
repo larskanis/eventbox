@@ -21,12 +21,13 @@ Gem::Specification.new do |spec|
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.2"
   spec.metadata["yard.run"] = "yri" # use "yard" to build full HTML docs.
 
   spec.add_development_dependency "bundler", ">= 1.16"
   spec.add_development_dependency "rake", "~> 13.0"
-  spec.add_development_dependency "minitest", "~> 5.0"
+  spec.add_development_dependency "minitest", "~> 6.0"
+  spec.add_development_dependency "minitest-mock", "~> 5.0"
   spec.add_development_dependency "minitest-hooks"
   spec.add_development_dependency "yard", "~> 0.9"
 end
