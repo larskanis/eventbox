@@ -1,4 +1,4 @@
-image: Visual Studio 2019
+image: Visual Studio 2022
 
 build: off
 
@@ -13,6 +13,8 @@ install:
         cmd /c ruby-setup.exe /verysilent /currentuser /dir=C:/Ruby$env:ruby_version
       }
   - ruby --version
+  - ridk version
+  - ridk install 3
   - gem --version
   - gem install bundler --conservative
   - bundle install
@@ -24,7 +26,4 @@ environment:
   matrix:
     - ruby_version: "head"
       RUBYDOWNLOAD: x64
-    - ruby_version: "head"
-      RUBYDOWNLOAD: x86
-    - ruby_version: "30-x64"
-    - ruby_version: "30"
+    - ruby_version: "32"
